@@ -63,38 +63,46 @@ interface Orgao {
   cep?: string;
   site?: string;
   segmento?: string;
-  origemLead?: string;
-  responsavelInterno?: string;
+  origem_lead?: string;
+  responsavel_interno?: string;
   descricao?: string;
   observacoes?: string;
   faturamento?: string;
-  contatos?: Contato[];
+  contatos?: ContatoType[];
 }
 
-interface Contato {
+interface Licitacao {
   id: string;
-  orgao_id: string;
+  nome: string;
+  valor: string;
+  status: string;
+  prazo: string;
+  responsavel: string;
+  dataJulgamento: string;
+  contatos?: ContatoType[];
+}
+
+interface ContatoType {
+  id: string;
   nome: string;
   cargo: string;
   email: string;
   telefone: string;
-}
-
-interface NovoContato {
-  nome: string;
-  email: string;
-  telefone: string;
-  cargo?: string;
-  departamento?: string;
-  observacoes?: string;
+  orgao_id?: string;
+  licitacao_id?: string;
+  data_criacao: string;
+  data_atualizacao: string;
 }
 
 interface DetalhesOrgaoProps {
   orgao: Orgao | null;
+  licitacao?: Licitacao | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOrgaoUpdate?: (orgao: Orgao) => void;
   onOrgaoDelete?: (orgao: Orgao) => void;
+  onLicitacaoUpdate?: (licitacao: Licitacao) => void;
+  onLicitacaoDelete?: (licitacao: Licitacao) => void;
 }
 
 interface SupabaseResponse<T> {
@@ -115,17 +123,6 @@ interface ContatoFormData {
   cargo: string;
   email: string;
   telefone: string;
-}
-
-interface Contato {
-  id: string;
-  nome: string;
-  cargo: string;
-  email: string;
-  telefone: string;
-  orgao_id: string;
-  created_at?: string;
-  updated_at?: string;
 }
 
 const statusColors: StatusColors = {
@@ -162,13 +159,23 @@ const getStatusLabel = (status: keyof StatusLabels) => {
   return statusLabels[status] || "Status Desconhecido";
 };
 
-export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrgaoDelete }: DetalhesOrgaoProps) {
+export function DetalhesOrgao({
+  orgao,
+  licitacao,
+  open,
+  onOpenChange,
+  onOrgaoUpdate,
+  onOrgaoDelete,
+  onLicitacaoUpdate,
+  onLicitacaoDelete
+}: DetalhesOrgaoProps) {
   const [activeTab, setActiveTab] = useState("resumo")
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<Partial<Orgao>>({})
-  const [contatos, setContatos] = useState<Contato[]>([])
-  const [novoContato, setNovoContato] = useState<Omit<Contato, 'id'>>({
-    orgao_id: orgao?.id || '',
+  const [contatos, setContatos] = useState<ContatoType[]>([])
+  const [novoContato, setNovoContato] = useState<Omit<ContatoType, 'id'>>({
+    orgao_id: '',
+    licitacao_id: '',
     nome: '',
     email: '',
     telefone: '',
@@ -180,8 +187,11 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
   const [isExpanded, setIsExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [orgaoState, setOrgaoState] = useState<Orgao | null>(orgao)
-  const [contatoEditando, setContatoEditando] = useState<Contato | null>(null)
+  const [contatoEditando, setContatoEditando] = useState<ContatoType | null>(null)
   const [showAddContatoDialog, setShowAddContatoDialog] = useState(false)
+  const [licitacoesDoOrgao, setLicitacoesDoOrgao] = useState<any[]>([])
+  const [orgaoResumo, setOrgaoResumo] = useState<any>(null);
+  const [nomeResponsavelInterno, setNomeResponsavelInterno] = useState<string>("");
 
   const { toast } = useToast()
 
@@ -193,155 +203,182 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
     }
   }, [open])
 
-  // Dados fictícios para demonstração
-  const orgaoDemo: Orgao = {
-    id: "c8c1f06e-9ed5-4de5-9f47-a48eb5fb1c28",
-    nome: "Prefeitura de São Paulo",
-    status: "ativo",
-    tipo: "prefeitura",
-    tipoLabel: "Prefeitura Municipal",
-    cnpj: "12.345.678/0001-90",
-    endereco: "Viaduto do Chá, 15",
-    cidade: "São Paulo",
-    estado: "SP",
-    segmento: "Administração Pública Municipal",
-    origemLead: "Edital publicado - ComprasNet",
-    responsavelInterno: "Ana Silva",
-    descricao: "Prefeitura do município de São Paulo, maior cidade do Brasil.",
-    observacoes: "Cliente exige documentação completa para licitações. Pagamentos em até 30 dias após empenho.",
-    faturamento: "Empenho prévio necessário. Nota fiscal com ISS (5%). Contatos devem ser sempre formalizados por e-mail com cópia para departamento jurídico.",
-    contatos: [
-      {
-        id: "c1",
-        orgao_id: "c8c1f06e-9ed5-4de5-9f47-a48eb5fb1c28",
-        nome: "João Oliveira",
-        cargo: "Secretário de Tecnologia",
-        email: "joao.oliveira@prefeiturasp.gov.br",
-        telefone: "(11) 3333-4444",
-      },
-      {
-        id: "c2",
-        orgao_id: "c8c1f06e-9ed5-4de5-9f47-a48eb5fb1c28",
-        nome: "Maria Santos",
-        cargo: "Diretora de Compras",
-        email: "maria.santos@prefeiturasp.gov.br",
-        telefone: "(11) 3333-5555",
-      },
-    ],
-  }
+  // Atualizar o estado novoContato quando orgao ou licitacao mudarem
+  useEffect(() => {
+    if (orgaoState?.id || licitacao?.id) {
+      setNovoContato(prev => ({
+        ...prev,
+        orgao_id: orgaoState?.id || '',
+        licitacao_id: licitacao?.id || ''
+      }))
+    }
+  }, [orgaoState?.id, licitacao?.id])
 
-  // Licitações relacionadas a este órgão
-  const licitacoesRelacionadas = [
-    {
-      id: "1",
-      nome: "Pregão Eletrônico 123/2023",
-      valor: "R$ 450.000,00",
-      status: "analise_interna",
-      prazo: "30/06/2023",
-      responsavel: "Ana Silva",
-      dataJulgamento: "15/07/2023",
-    },
-    {
-      id: "2",
-      nome: "Tomada de Preços 45/2022",
-      valor: "R$ 320.000,00",
-      status: "vencida",
-      prazo: "Concluído",
-      responsavel: "Carlos Oliveira",
-      dataJulgamento: "10/11/2022",
-    },
-    {
-      id: "3",
-      nome: "Concorrência 78/2022",
-      valor: "R$ 780.000,00",
-      status: "nao_vencida",
-      prazo: "Concluído",
-      responsavel: "Pedro Santos",
-      dataJulgamento: "22/08/2022",
-    },
-  ]
+  // Buscar os dados do órgão diretamente da tabela 'orgao' e popular os campos do formulário/resumo
+  const carregarOrgaoBanco = async (orgaoId?: string) => {
+    try {
+      const idParaConsulta = orgaoId || orgao?.id;
+      if (!idParaConsulta) return;
+      const { data, error } = await crmonefactory
+        .from('orgaos')
+        .select('*')
+        .eq('id', idParaConsulta)
+        .single();
+      if (!error && data) {
+        setFormData(data);
+        setOrgaoState(data);
+      }
+    } catch (e) {
+      // Pode adicionar um toast de erro se desejar
+    }
+  };
+
+  // Chamar carregarOrgaoBanco sempre que orgao?.id mudar e quando abrir o painel
+  useEffect(() => {
+    if (orgao?.id && open) {
+      carregarOrgaoBanco(orgao.id);
+    }
+  }, [orgao?.id, open]);
 
   useEffect(() => {
-    // Initialize form with orgao data or demo data if orgao is null
-    setFormData(orgao || orgaoDemo)
-  }, [orgao])
+    // Adicionar log para debugar
+    console.log("DetalhesOrgao recebeu licitacao:", licitacao)
+    console.log("DetalhesOrgao recebeu orgao:", orgao)
+  }, [licitacao, orgao])
 
   useEffect(() => {
     if (orgao?.id && open) {
-      // Primeiro verifica se o órgão existe antes de carregar contatos
-      verificarOrgaoExiste()
+      // Primeiro verificar se o órgão existe no banco de dados
+      verificarECarregarOrgao()
     }
   }, [orgao?.id, open])
+  
+  // Efeito adicional para garantir que os contatos sejam carregados quando orgaoState mudar
+  useEffect(() => {
+    if (orgaoState?.id && open) {
+      carregarContatos(orgaoState.id)
+      carregarLicitacoesDoOrgao(orgaoState.id)
+      carregarResumoOrgao(orgaoState.id);
+    }
+  }, [orgaoState?.id, open])
+  
+  // Buscar nome do responsável interno sempre que formData.responsavel_interno mudar
+  useEffect(() => {
+    const buscarResponsavel = async () => {
+      if (formData.responsavel_interno) {
+        try {
+          const { data, error } = await crmonefactory
+            .from('usuarios') // Troque para 'users' se necessário
+            .select('nome')
+            .eq('id', formData.responsavel_interno)
+            .single();
+          if (!error && data?.nome) {
+            setNomeResponsavelInterno(data.nome);
+          } else {
+            setNomeResponsavelInterno("");
+          }
+        } catch {
+          setNomeResponsavelInterno("");
+        }
+      } else {
+        setNomeResponsavelInterno("");
+      }
+    };
+    buscarResponsavel();
+  }, [formData.responsavel_interno]);
 
-  // Função para verificar se o órgão existe antes de carregar contatos
-  const verificarOrgaoExiste = async () => {
+  // Função para verificar se o órgão existe e carregar dados reais
+  const verificarECarregarOrgao = async () => {
     try {
-      if (!orgao?.id) {
-        console.log('ID do órgão não fornecido')
-        return
-      }
-
-      console.log('Verificando se o órgão existe:', orgao.id)
-
-      // Verifica no localStorage se já conhecemos que este é um órgão temporário
-      const isTemporaryOrgao = sessionStorage.getItem(`temp_orgao_${orgao.id}`)
-      if (isTemporaryOrgao === "true") {
-        console.log('Este é um órgão temporário, pulando verificação na API')
-        return
-      }
-
-      // Verifica se o órgão existe
-      const { data: orgaoData, error: orgaoError } = await crmonefactory
+      console.log('Verificando se o órgão existe no banco de dados:', orgao?.id, orgao?.nome)
+      
+      // Primeiro tentar buscar pelo nome, que é mais confiável que o ID temporário
+      const { data: orgaoPorNome, error: errorNome } = await crmonefactory
         .from('orgaos')
-        .select('id')
-        .eq('id', orgao.id)
-        .maybeSingle()
-
-      if (orgaoError) {
-        console.error('Erro ao verificar órgão:', orgaoError)
+        .select('*')
+        .ilike('nome', orgao?.nome || '')
+        .limit(1)
+      
+      if (orgaoPorNome && orgaoPorNome.length > 0) {
+        // Encontrou o órgão pelo nome, usar o ID real
+        console.log('Órgão encontrado pelo nome:', orgaoPorNome[0])
+        
+        // Atualizar o estado com o órgão real do banco
+        setOrgaoState(orgaoPorNome[0])
+        
+        // Carregar contatos e licitações com o ID real
+        carregarContatos(orgaoPorNome[0].id)
+        carregarLicitacoesDoOrgao(orgaoPorNome[0].id)
         return
       }
-
-      if (!orgaoData) {
-        console.log('Órgão não encontrado no banco, marcando como temporário')
-        // Marca este órgão como temporário no sessionStorage para evitar futuras verificações
-        sessionStorage.setItem(`temp_orgao_${orgao.id}`, "true")
-        
-        // Exibe mensagem informativa para o usuário
+      
+      // Se não encontrou pelo nome, tentar pelo ID (menos provável de funcionar com ID temporário)
+      const { data: orgaoPorId, error: errorId } = await crmonefactory
+        .from('orgaos')
+        .select('*')
+        .eq('id', orgao?.id || '')
+        .single()
+      
+      if (orgaoPorId) {
+        console.log('Órgão encontrado pelo ID:', orgaoPorId)
+        setOrgaoState(orgaoPorId)
+        carregarContatos(orgaoPorId.id)
+        carregarLicitacoesDoOrgao(orgaoPorId.id)
+        return
+      }
+      
+      // Se chegou aqui, o órgão não existe no banco, tentar criar
+      console.log('Órgão não encontrado, tentando criar:', orgao)
+      
+      // Criar o órgão no banco de dados
+      const { data: novoOrgao, error: errorCriacao } = await crmonefactory
+        .from('orgaos')
+        .insert({
+          id: orgao?.id,
+          nome: orgao?.nome,
+          status: orgao?.status || 'ativo'
+        })
+        .select()
+      
+      if (errorCriacao) {
+        console.error('Erro ao criar órgão:', errorCriacao)
         toast({
-          title: "Informação",
-          description: "Este órgão ainda não está completamente cadastrado no sistema.",
+          title: "Erro",
+          description: "Não foi possível criar o órgão no banco de dados.",
+          variant: "destructive"
         })
       } else {
-        // Se o órgão existe, carrega seus contatos
-        carregarContatos()
+        console.log('Órgão criado com sucesso:', novoOrgao)
+        // Agora podemos carregar contatos (que estarão vazios inicialmente)
+        carregarContatos(orgao?.id)
+        carregarLicitacoesDoOrgao(orgao?.id)
       }
+      
     } catch (error) {
-      console.error('Erro ao verificar órgão:', error)
+      console.error('Erro ao verificar/criar órgão:', error)
     }
   }
 
-  const carregarContatos = async () => {
+  // Função para carregar contatos via API em vez de Supabase direto
+  const carregarContatos = async (orgaoId?: string) => {
     try {
-      if (!orgao?.id) {
+      // Usar o ID passado como parâmetro ou o ID do órgão do estado atualizado
+      const idParaConsulta = orgaoId || orgaoState?.id || orgao?.id
+      
+      if (!idParaConsulta) {
         console.log('ID do órgão não encontrado')
         return
       }
+      
+      // Log para debug
+      console.log('Carregando contatos com ID consistente:', idParaConsulta)
 
-      // Verifica no localStorage se este é um órgão temporário
-      const isTemporaryOrgao = sessionStorage.getItem(`temp_orgao_${orgao.id}`)
-      if (isTemporaryOrgao === "true") {
-        console.log('Este é um órgão temporário, não carregando contatos')
-        return
-      }
+      console.log('Carregando contatos para o órgão:', idParaConsulta)
 
-      console.log('Carregando contatos para o órgão:', orgao.id)
-
-      // Carrega os contatos diretamente, pois já verificamos que o órgão existe
       const { data, error } = await crmonefactory
         .from('orgao_contatos')
         .select('*')
-        .eq('orgao_id', orgao.id)
+        .eq('orgao_id', idParaConsulta)
         .order('nome', { ascending: true })
 
       if (error) {
@@ -350,88 +387,350 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
       }
 
       console.log('Contatos carregados:', data)
-      setContatos(data || [])
+      setContatos((Array.isArray(data) ? data : []).map(normalizeContato))
     } catch (error) {
       console.error('Erro ao carregar contatos:', error)
       toast({
-        title: "Erro",
-        description: "Erro ao carregar contatos",
+        title: "Atenção",
+        description: "Não foi possível carregar os contatos. Use a funcionalidade de adicionar contato.",
         variant: "destructive"
       })
     }
   }
 
-  const adicionarContato = async (contato: Contato) => {
+  // Adicionar função para carregar licitações relacionadas ao órgão
+  const carregarLicitacoesDoOrgao = async (orgaoId?: string) => {
     try {
-      const { error } = await crmonefactory
-        .from('orgao_contatos')
-        .insert(contato)
-        .eq('id', contato.id)
+      // Usar o ID passado como parâmetro ou o ID do órgão do estado atualizado
+      const idParaConsulta = orgaoId || orgaoState?.id || orgao?.id
+      
+      if (!idParaConsulta) {
+        console.log('ID do órgão não encontrado')
+        return
+      }
+      
+      // Log para debug
+      console.log('Carregando licitações com ID consistente:', idParaConsulta)
 
-      if (error) throw error
+      console.log('Carregando licitações para o órgão:', idParaConsulta)
 
-      setContatos(prev => [...prev, contato])
-      toast({
-        title: "Sucesso",
-        description: "Contato adicionado com sucesso!"
-      })
+      const { data, error } = await crmonefactory
+        .from('licitacoes')
+        .select('*')
+        .eq('orgao_id', idParaConsulta)
+        .order('data_criacao', { ascending: false })
+
+      if (error) {
+        console.error('Erro ao carregar licitações:', error)
+        throw error
+      }
+
+      console.log('Licitações carregadas:', data)
+      setLicitacoesDoOrgao(data || [])
     } catch (error) {
-      console.error('Erro ao adicionar contato:', error)
+      console.error('Erro ao carregar licitações:', error)
       toast({
-        title: "Erro",
-        description: "Erro ao adicionar contato"
+        title: "Atenção",
+        description: "Não foi possível carregar as licitações deste órgão",
+        variant: "destructive"
       })
     }
   }
 
-  const excluirContato = async (contato: Contato) => {
+  // Função para carregar o resumo do órgão da tabela orgao
+  const carregarResumoOrgao = async (orgaoId?: string) => {
     try {
+      const idParaConsulta = orgaoId || orgaoState?.id || orgao?.id;
+      if (!idParaConsulta) return;
+      const { data, error } = await crmonefactory
+        .from('orgao')
+        .select('*')
+        .eq('orgao_id', idParaConsulta)
+        .single();
+      if (!error && data) {
+        setOrgaoResumo(data);
+      } else {
+        setOrgaoResumo(null);
+      }
+    } catch (e) {
+      setOrgaoResumo(null);
+    }
+  };
+
+  // Função para adicionar novo contato
+  const handleAddContato = async (formData: ContatoFormData) => {
+    try {
+      if (!orgaoState?.id) {
+        throw new Error('ID do órgão não encontrado')
+      }
+
+      console.log('Adicionando contato para o órgão:', orgaoState.id)
+      
+      // Criar um ID único para o contato
+      const novoContatoId = uuidv4()
+      
+      // Dados do contato para inserção
+      const novoContato = {
+        id: novoContatoId,
+        orgao_id: orgaoState.id,
+        nome: formData.nome,
+        cargo: formData.cargo || '',
+        email: formData.email || '',
+        telefone: formData.telefone || '',
+        // Incluir nome do órgão para que a API possa criar o órgão se necessário
+        orgaoNome: orgaoState.nome || 'Órgão sem nome'
+      }
+      
+      // Adicionar à UI imediatamente para feedback
+      const contatoUI = {
+        ...novoContato,
+        data_criacao: new Date().toISOString(),
+        data_atualizacao: new Date().toISOString()
+      }
+      
+      setContatos(prev => [...prev, normalizeContato(contatoUI)])
+      setShowAddContatoDialog(false)
+      
+      // Feedback positivo
+      toast({
+        title: "Contato adicionado",
+        description: "O contato foi adicionado à interface"
+      })
+      
+      // Tentar salvar via API (mais confiável)
+      try {
+        console.log('Enviando dados para API incluindo nome do órgão:', novoContato)
+        const response = await fetch('/api/contatos', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          },
+          body: JSON.stringify(novoContato),
+        })
+        
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('Resposta de erro da API:', errorText)
+          throw new Error('Erro na API: ' + errorText)
+        }
+        
+        const data = await response.json()
+        console.log('Contato salvo via API:', data)
+        
+        // Atualizar toast com sucesso
+        toast({
+          title: "Contato salvo",
+          description: "O contato foi armazenado permanentemente"
+        })
+        
+        // Aumentar o tempo antes de recarregar os contatos
+        setTimeout(() => {
+          console.log('Recarregando contatos após espera para o órgão:', orgaoState.id)
+          carregarContatos(orgaoState.id)
+        }, 1000)
+        
+        return
+      } catch (apiError) {
+        console.error('Falha ao salvar via API:', apiError)
+        // Continue para tentar diretamente no Supabase
+      }
+      
+      // Tentar salvar diretamente no Supabase como fallback
+      console.log('Tentando salvar diretamente no Supabase...')
+      
+      // Primeiro, verificar se o órgão existe
+      const { data: orgaoExistente, error: checkError } = await crmonefactory
+        .from('orgaos')
+        .select('id')
+        .eq('id', orgaoState.id)
+        .single()
+      
+      // Se o órgão não existir, criá-lo primeiro
+      if (checkError || !orgaoExistente) {
+        console.log('Órgão não existe. Criando-o primeiro...')
+        
+        const { error: createError } = await crmonefactory
+          .from('orgaos')
+          .insert({
+            id: orgaoState.id,
+            nome: orgaoState.nome || 'Nome não definido'
+          })
+        
+        if (createError) {
+          console.error('Erro ao criar órgão no Supabase:', createError)
+          throw new Error('Erro ao criar órgão: ' + createError.message)
+        }
+        
+        console.log('Órgão criado com sucesso no Supabase')
+      }
+      
+      // Agora inserir o contato
+      const { error } = await crmonefactory
+        .from('orgao_contatos')
+        .insert({
+          id: novoContatoId,
+          orgao_id: orgaoState.id,
+          nome: formData.nome,
+          cargo: formData.cargo || null,
+          email: formData.email || null,
+          telefone: formData.telefone || null
+        })
+      
+      if (error) {
+        console.error('Erro ao salvar no Supabase:', error)
+        throw new Error('Erro ao salvar contato: ' + error.message)
+      } else {
+        console.log('Contato salvo com sucesso no Supabase')
+        
+        // Atualizar toast com sucesso
+        toast({
+          title: "Contato salvo",
+          description: "O contato foi armazenado permanentemente"
+        })
+        
+        carregarContatos(orgaoState.id) // Recarregar para sincronizar com o mesmo ID usado na criação
+      }
+      
+    } catch (error) {
+      console.error('Erro ao adicionar contato:', error)
+      
+      let mensagem = "O contato foi adicionado à interface, mas não foi possível salvá-lo permanentemente"
+      
+      if (error instanceof Error) {
+        mensagem += ": " + error.message
+      }
+      
+      toast({
+        title: "Aviso",
+        description: mensagem,
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Função para excluir um contato
+  const excluirContato = async (contato: ContatoType) => {
+    try {
+      // Tentar via API primeiro
+      try {
+        const response = await fetch(`/api/contatos/${contato.id}`, {
+          method: 'DELETE',
+        })
+        
+        if (!response.ok) {
+          throw new Error('Erro na API: ' + await response.text())
+        }
+        
+        console.log('Contato excluído via API')
+        
+        // Remover contato da lista local para UI
+        setContatos(prev => prev.filter(c => c.id !== contato.id))
+        
+        // Feedback positivo
+        toast({
+          title: "Contato excluído",
+          description: "O contato foi excluído com sucesso"
+        })
+        
+        // Recarregar contatos para exibir os dados do servidor
+        carregarContatos()
+        return
+      } catch (apiError) {
+        console.error('Falha ao excluir via API:', apiError)
+      }
+      
+      // Fallback para Supabase direto
+      console.log('Tentando excluir diretamente no Supabase...')
       const { error } = await crmonefactory
         .from('orgao_contatos')
         .delete()
         .eq('id', contato.id)
-
-      if (error) throw error
-
-      setContatos(contatos.filter(c => c.id !== contato.id))
-      toast({
-        title: "Sucesso",
-        description: "Contato excluído com sucesso!"
-      })
+      
+      if (error) {
+        console.error('Erro ao excluir no Supabase:', error)
+        // Não vamos falhar aqui, já removemos o contato da UI
+      } else {
+        console.log('Contato excluído com sucesso no Supabase')
+        carregarContatos(orgaoState.id) // Recarregar para sincronizar com o mesmo ID usado na criação
+      }
+      
     } catch (error) {
       console.error('Erro ao excluir contato:', error)
       toast({
-        title: "Erro",
-        description: "Erro ao excluir contato"
+        title: "Aviso",
+        description: "O contato foi removido da interface, mas pode não ter sido excluído permanentemente",
+        variant: "destructive"
       })
     }
   }
 
-  const editarContato = async (contato: Contato) => {
+  // Função para editar um contato existente
+  const editarContato = async (contato: ContatoType) => {
     try {
-      const { error } = await crmonefactory
-        .from('orgao_contatos')
-        .update({
-          nome: contato.nome,
-          cargo: contato.cargo || null,
-          email: contato.email || null,
-          telefone: contato.telefone || null
+      const updatedContato = {
+        ...contato,
+        orgao_id: contato.orgao_id,
+        data_atualizacao: new Date().toISOString()
+      }
+
+      console.log('Tentando atualizar contato:', updatedContato)
+
+      // Tentar via API primeiro
+      try {
+        const response = await fetch(`/api/contatos/${contato.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updatedContato),
         })
+        
+        if (!response.ok) {
+          throw new Error('Erro na API: ' + await response.text())
+        }
+        
+        const data = await response.json()
+        console.log('Contato atualizado via API:', data)
+        
+        // Atualizar contato na lista local para UI
+        setContatos(prev => prev.map(c => c.id === contato.id ? normalizeContato(data) : c))
+        
+        // Feedback positivo
+        toast({
+          title: "Contato atualizado",
+          description: "O contato foi atualizado com sucesso"
+        })
+        
+        // Recarregar contatos para exibir os dados do servidor
+        carregarContatos()
+        return
+      } catch (apiError) {
+        console.error('Falha ao atualizar via API:', apiError)
+      }
+      
+      // Fallback para Supabase direto
+      console.log('Tentando atualizar diretamente no Supabase...')
+      const { data, error } = await crmonefactory
+        .from('orgao_contatos')
+        .update(updatedContato)
         .eq('id', contato.id)
-
-      if (error) throw error
-
-      setContatos(contatos.map(c => c.id === contato.id ? contato : c))
-      setEditandoContato(null)
-      toast({
-        title: "Sucesso",
-        description: "Contato atualizado com sucesso!"
-      })
+        .select()
+      
+      if (error) {
+        console.error('Erro ao atualizar no Supabase:', error)
+        // Não vamos falhar aqui, já atualizamos o contato na UI
+      } else {
+        console.log('Contato atualizado com sucesso no Supabase')
+        carregarContatos(orgaoState.id) // Recarregar para sincronizar com o mesmo ID usado na criação
+      }
+      
     } catch (error) {
       console.error('Erro ao atualizar contato:', error)
       toast({
-        title: "Erro",
-        description: "Erro ao atualizar contato. Tente novamente."
+        title: "Aviso",
+        description: "O contato foi atualizado na interface, mas pode não ter sido atualizado permanentemente",
+        variant: "destructive"
       })
     }
   }
@@ -454,41 +753,59 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
 
   const handleSalvarOrgao = async () => {
     try {
-      if (!orgao) return;
-
-      const { error } = await crmonefactory
-        .from('orgaos')
-        .update({
-          nome: orgao.nome,
-          status: orgao.status,
-          cnpj: orgao.cnpj,
-          endereco: orgao.endereco,
-          cidade: orgao.cidade,
-          estado: orgao.estado,
-          cep: orgao.cep,
-          site: orgao.site,
-          observacoes: orgao.observacoes
-        })
-        .eq('id', orgao.id)
-
-      if (error) throw error
-
-      if (onOrgaoUpdate) {
-        onOrgaoUpdate(orgao)
+      if (!orgao || !orgao.id) {
+        console.error('ID do órgão ausente!');
+        toast({
+          title: 'Erro',
+          description: 'ID do órgão ausente! Não é possível atualizar.',
+          variant: 'destructive',
+        });
+        return;
       }
-
+      // Montar objeto apenas com os campos válidos da tabela 'orgaos'
+      const dadosAtualizados: any = {};
+      const camposValidos = [
+        'nome', 'tipo', 'cnpj', 'endereco', 'cidade', 'estado', 'segmento', 'origem_lead',
+        'responsavel_interno', 'descricao', 'observacoes', 'faturamento', 'resumo_detalhado',
+        'palavras_chave', 'ultima_licitacao_data', 'codigo_externo', 'ativo'
+      ];
+      camposValidos.forEach((campo) => {
+        if (formData[campo] !== undefined) dadosAtualizados[campo] = formData[campo];
+      });
+      console.log('Payload do update:', dadosAtualizados, 'ID:', orgao.id);
+      // Update no Supabase
+      const { data, error } = await crmonefactory
+        .from('orgaos')
+        .update(dadosAtualizados)
+        .eq('id', orgao.id)
+        .select()
+        .single();
+      if (error) throw error
+      if (data) {
+        setOrgaoState(data);
+        if (onOrgaoUpdate) onOrgaoUpdate(data);
+      }
       toast({
-        title: "Sucesso",
-        description: "Órgão atualizado com sucesso",
-        variant: "default"
-      })
+        title: 'Sucesso',
+        description: 'Órgão atualizado com sucesso',
+        variant: 'default',
+      });
+      setFormData({});
+      setIsEditing(false);
     } catch (error) {
-      console.error('Erro ao atualizar órgão:', error)
+      // Enhanced error logging
+      console.error('Erro detalhado ao atualizar órgão:', error, typeof error, JSON.stringify(error));
       toast({
-        title: "Erro",
-        description: "Erro ao atualizar órgão",
-        variant: "destructive"
-      })
+        title: 'Erro',
+        description: `Erro ao atualizar órgão: ${
+          error instanceof Error
+            ? error.message
+            : typeof error === 'object'
+              ? JSON.stringify(error)
+              : String(error)
+        }`,
+        variant: 'destructive',
+      });
     }
   }
 
@@ -524,185 +841,18 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
     }
   }
 
-  const handleAddContato = async (formData: ContatoFormData) => {
-    try {
-      if (!orgao?.id) {
-        throw new Error('ID do órgão não encontrado')
-      }
-
-      console.log('ID do órgão:', orgao.id)
-
-      // Verifica se o órgão existe na tabela orgaos
-      const { data: orgaoData, error: orgaoError } = await crmonefactory
-        .from('orgaos')
-        .select('id')
-        .eq('id', orgao.id)
-        .maybeSingle()
-
-      if (orgaoError) {
-        console.error('Erro ao verificar órgão:', orgaoError)
-        throw new Error(`Erro ao verificar órgão: ${orgaoError.message}`)
-      }
-
-      if (!orgaoData) {
-        throw new Error(`Órgão com ID ${orgao.id} não encontrado na tabela orgaos`)
-      }
-
-      // Validação dos campos obrigatórios
-      if (!formData.nome?.trim()) {
-        throw new Error('Nome do contato é obrigatório')
-      }
-
-      const newContato = {
-        id: uuidv4(),
-        orgao_id: orgao.id,
-        nome: formData.nome.trim(),
-        cargo: formData.cargo?.trim() || null,
-        email: formData.email?.trim() || null,
-        telefone: formData.telefone?.trim() || null,
-        data_criacao: new Date().toISOString(),
-        data_atualizacao: new Date().toISOString(),
-        licitacao_id: null
-      }
-
-      console.log('Tentando adicionar contato:', newContato)
-
-      const { data, error } = await crmonefactory
-        .from('orgao_contatos')
-        .insert([newContato])
-        .select()
-
-      if (error) {
-        console.error('Erro detalhado ao adicionar contato:', error)
-        if (error.code === '23503') { // Código de erro para violação de chave estrangeira
-          throw new Error(`Erro: O órgão com ID ${orgao.id} não existe na tabela orgaos`)
-        }
-        throw new Error(error.message || 'Erro ao adicionar contato')
-      }
-
-      if (!data || data.length === 0) {
-        throw new Error('Nenhum dado retornado após inserção')
-      }
-
-      console.log('Contato adicionado com sucesso:', data[0])
-
-      setContatos(prev => [...prev, data[0]])
-      setShowAddContatoDialog(false)
-      toast({
-        title: "Sucesso",
-        description: "Contato adicionado com sucesso"
-      })
-    } catch (error) {
-      console.error('Erro ao adicionar contato:', error)
-      let errorMessage = 'Erro ao adicionar contato'
-      
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'object' && error !== null) {
-        errorMessage = JSON.stringify(error)
-      }
-
-      toast({
-        title: "Erro",
-        description: errorMessage,
-        variant: "destructive"
-      })
-    }
-  }
-
-  const handleEditContato = async (contato: Contato) => {
-    try {
-      if (!orgao?.id) {
-        throw new Error('ID do órgão não encontrado')
-      }
-
-      const updatedContato = {
-        ...contato,
-        orgao_id: orgao.id,
-        data_atualizacao: new Date().toISOString()
-      }
-
-      console.log('Tentando atualizar contato:', updatedContato)
-
-      const { data, error } = await crmonefactory
-        .from('orgao_contatos')
-        .update(updatedContato)
-        .eq('id', contato.id)
-        .select()
-
-      if (error) {
-        console.error('Erro detalhado ao atualizar contato:', error)
-        throw new Error(error.message || 'Erro ao atualizar contato')
-      }
-
-      if (!data || data.length === 0) {
-        throw new Error('Nenhum dado retornado após atualização')
-      }
-
-      console.log('Contato atualizado com sucesso:', data[0])
-
-      setContatos(prev => prev.map(c => c.id === contato.id ? data[0] : c))
-      setContatoEditando(null)
-      toast({
-        title: "Sucesso",
-        description: "Contato atualizado com sucesso"
-      })
-    } catch (error) {
-      console.error('Erro ao atualizar contato:', error)
-      let errorMessage = 'Erro ao atualizar contato'
-      
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'object' && error !== null) {
-        errorMessage = JSON.stringify(error)
-      }
-
-      toast({
-        title: "Erro",
-        description: errorMessage,
-        variant: "destructive"
-      })
-    }
-  }
-
-  const handleDeleteContato = async (contato: Contato) => {
-    try {
-      console.log('Tentando excluir contato:', contato.id)
-
-      const { error } = await crmonefactory
-        .from('orgao_contatos')
-        .delete()
-        .eq('id', contato.id)
-
-      if (error) {
-        console.error('Erro detalhado ao excluir contato:', error)
-        throw new Error(error.message || 'Erro ao excluir contato')
-      }
-
-      console.log('Contato excluído com sucesso')
-
-      setContatos(prev => prev.filter(c => c.id !== contato.id))
-      toast({
-        title: "Sucesso",
-        description: "Contato excluído com sucesso"
-      })
-    } catch (error) {
-      console.error('Erro ao excluir contato:', error)
-      let errorMessage = 'Erro ao excluir contato'
-      
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'object' && error !== null) {
-        errorMessage = JSON.stringify(error)
-      }
-
-      toast({
-        title: "Erro",
-        description: errorMessage,
-        variant: "destructive"
-      })
-    }
-  }
+  const normalizeContato = (c: any) => ({
+    id: c.id,
+    nome: c.nome || "",
+    cargo: c.cargo || "",
+    email: c.email || "",
+    telefone: c.telefone || "",
+    orgao_id: c.orgao_id || "",
+    licitacao_id: c.licitacao_id || "",
+    data_criacao: c.data_criacao || "",
+    data_atualizacao: c.data_atualizacao || "",
+    ...c
+  });
 
   if (!orgao) {
     return (
@@ -792,7 +942,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                       <div>
                         <Label>CNPJ</Label>
                         {isEditing ? (
-                          <Input value={formData.cnpj} onChange={(e) => handleFieldChange("cnpj", e.target.value)} />
+                          <Input value={formData.cnpj || ""} onChange={(e) => handleFieldChange("cnpj", e.target.value)} />
                         ) : (
                           <p className="text-sm mt-1">{formData.cnpj}</p>
                         )}
@@ -802,7 +952,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                         <Label>Endereço</Label>
                         {isEditing ? (
                           <Input
-                            value={formData.endereco}
+                            value={formData.endereco || ""}
                             onChange={(e) => handleFieldChange("endereco", e.target.value)}
                           />
                         ) : (
@@ -815,7 +965,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                           <Label>Cidade</Label>
                           {isEditing ? (
                             <Input
-                              value={formData.cidade}
+                              value={formData.cidade || ""}
                               onChange={(e) => handleFieldChange("cidade", e.target.value)}
                             />
                           ) : (
@@ -826,7 +976,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                           <Label>Estado</Label>
                           {isEditing ? (
                             <Input
-                              value={formData.estado}
+                              value={formData.estado || ""}
                               onChange={(e) => handleFieldChange("estado", e.target.value)}
                             />
                           ) : (
@@ -841,7 +991,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                         <Label>Segmento</Label>
                         {isEditing ? (
                           <Input
-                            value={formData.segmento}
+                            value={formData.segmento || ""}
                             onChange={(e) => handleFieldChange("segmento", e.target.value)}
                           />
                         ) : (
@@ -853,11 +1003,11 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                         <Label>Origem da Lead</Label>
                         {isEditing ? (
                           <Input
-                            value={formData.origemLead}
-                            onChange={(e) => handleFieldChange("origemLead", e.target.value)}
+                            value={formData.origem_lead || ""}
+                            onChange={(e) => handleFieldChange("origem_lead", e.target.value)}
                           />
                         ) : (
-                          <p className="text-sm mt-1">{formData.origemLead}</p>
+                          <p className="text-sm mt-1">{formData.origem_lead}</p>
                         )}
                       </div>
 
@@ -865,13 +1015,13 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                         <Label>Responsável Interno</Label>
                         {isEditing ? (
                           <Input
-                            value={formData.responsavelInterno}
-                            onChange={(e) => handleFieldChange("responsavelInterno", e.target.value)}
+                            value={formData.responsavel_interno || ""}
+                            onChange={(e) => handleFieldChange("responsavel_interno", e.target.value)}
                           />
                         ) : (
                           <div className="flex items-center gap-2 mt-1">
                             <User className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm">{formData.responsavelInterno}</span>
+                            <span className="text-sm">{nomeResponsavelInterno || formData.responsavel_interno}</span>
                           </div>
                         )}
                       </div>
@@ -879,12 +1029,27 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                   </div>
                 </div>
 
+                {orgaoResumo && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Resumo do Órgão</h3>
+                    <div className="bg-gray-50 rounded p-4 text-sm">
+                      {Object.entries(orgaoResumo).map(([key, value]) => (
+                        key !== 'orgao_id' && (
+                          <div key={key} className="mb-1">
+                            <span className="font-semibold capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <Label>Descrição</Label>
                   {isEditing ? (
                     <Textarea
                       className="mt-2"
-                      value={formData.descricao}
+                      value={formData.descricao || ""}
                       onChange={(e) => handleFieldChange("descricao", e.target.value)}
                       rows={3}
                     />
@@ -898,7 +1063,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                   {isEditing ? (
                     <Textarea
                       className="mt-2"
-                      value={formData.observacoes}
+                      value={formData.observacoes || ""}
                       onChange={(e) => handleFieldChange("observacoes", e.target.value)}
                       rows={3}
                     />
@@ -912,7 +1077,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                     <h3 className="text-base font-medium mb-2">Informações para Faturamento</h3>
                     {isEditing ? (
                       <Textarea
-                        value={formData.faturamento}
+                        value={formData.faturamento || ""}
                         onChange={(e) => handleFieldChange("faturamento", e.target.value)}
                         rows={3}
                       />
@@ -945,7 +1110,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                           <Label htmlFor="nome-contato">Nome</Label>
                           <Input
                             id="nome-contato"
-                            value={novoContato.nome}
+                            value={novoContato.nome || ""}
                             onChange={(e) => setNovoContato({ ...novoContato, nome: e.target.value })}
                           />
                         </div>
@@ -953,7 +1118,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                           <Label htmlFor="cargo-contato">Cargo</Label>
                           <Input
                             id="cargo-contato"
-                            value={novoContato.cargo}
+                            value={novoContato.cargo || ""}
                             onChange={(e) => setNovoContato({ ...novoContato, cargo: e.target.value })}
                           />
                         </div>
@@ -962,7 +1127,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                           <Input
                             id="email-contato"
                             type="email"
-                            value={novoContato.email}
+                            value={novoContato.email || ""}
                             onChange={(e) => setNovoContato({ ...novoContato, email: e.target.value })}
                           />
                         </div>
@@ -970,7 +1135,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                           <Label htmlFor="telefone-contato">Telefone</Label>
                           <Input
                             id="telefone-contato"
-                            value={novoContato.telefone}
+                            value={novoContato.telefone || ""}
                             onChange={(e) => setNovoContato({ ...novoContato, telefone: e.target.value })}
                           />
                         </div>
@@ -993,7 +1158,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                     </div>
                   ) : (
-                    contatos.map((contato) => (
+                    contatos.filter(c => c && c.id).map((contato) => (
                       <Card key={contato.id}>
                         <CardContent className="p-4">
                           {editandoContato === contato.id ? (
@@ -1002,14 +1167,14 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                                 <div className="space-y-2">
                                       <Label>Nome</Label>
                                       <Input 
-                                        value={contato.nome} 
+                                        value={contato.nome || ""} 
                                     onChange={(e) => handleContatoChange(contato.id, 'nome', e.target.value)}
                                       />
                                     </div>
                                 <div className="space-y-2">
                                       <Label>Cargo</Label>
                                       <Input 
-                                    value={contato.cargo}
+                                    value={contato.cargo || ""}
                                     onChange={(e) => handleContatoChange(contato.id, 'cargo', e.target.value)}
                                       />
                                     </div>
@@ -1018,14 +1183,14 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                                 <div className="space-y-2">
                                       <Label>Email</Label>
                                       <Input 
-                                        value={contato.email} 
+                                        value={contato.email || ""} 
                                     onChange={(e) => handleContatoChange(contato.id, 'email', e.target.value)}
                                       />
                                     </div>
                                 <div className="space-y-2">
                                       <Label>Telefone</Label>
                                       <Input 
-                                    value={contato.telefone}
+                                    value={contato.telefone || ""}
                                     onChange={(e) => handleContatoChange(contato.id, 'telefone', e.target.value)}
                                       />
                                     </div>
@@ -1040,7 +1205,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                                     </Button>
                                 <Button
                                   size="sm"
-                                  onClick={() => handleEditContato(contato)}
+                                  onClick={() => editarContato(contato)}
                                 >
                                       Salvar
                                     </Button>
@@ -1055,16 +1220,20 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                                   {contato.email && (
                                     <div className="flex items-center">
                                       <Mail className="w-4 h-4 mr-1" />
+                                      <a href={`mailto:${contato.email}`} className="text-blue-600 underline hover:text-blue-800" target="_blank" rel="noopener noreferrer">
                                         {contato.email}
+                                      </a>
                                     </div>
                                   )}
                                   {contato.telefone && (
                                     <div className="flex items-center">
                                       <Phone className="w-4 h-4 mr-1" />
+                                      <a href={`tel:${contato.telefone.replace(/[^\d+]/g, '')}`} className="text-blue-600 underline hover:text-blue-800" target="_blank" rel="noopener noreferrer">
                                         {contato.telefone}
+                                      </a>
                                     </div>
-                              )}
-                            </div>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex space-x-2">
                                   <Button
@@ -1077,7 +1246,7 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
                                   <Button
                                     variant="ghost"
                                   size="sm"
-                                  onClick={() => handleDeleteContato(contato)}
+                                  onClick={() => excluirContato(contato)}
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
@@ -1094,36 +1263,47 @@ export function DetalhesOrgao({ orgao, open, onOpenChange, onOrgaoUpdate, onOrga
 
             <TabsContent value="licitacoes">
               <div className="space-y-6">
-                <h3 className="text-lg font-medium mb-4">Licitações</h3>
+                <h3 className="text-lg font-medium mb-4">Licitações Relacionadas</h3>
 
                 <div className="space-y-4">
-                  {licitacoesRelacionadas.map((licitacao) => (
-                    <Card key={licitacao.id} className="overflow-hidden">
-                      <div className="flex items-center justify-between p-4 border-b">
-                        <div>
-                          <h4 className="font-medium">{licitacao.nome}</h4>
-                          <p className="text-sm text-gray-500">
-                            Responsável: {licitacao.responsavel} • Julgamento: {licitacao.dataJulgamento}
-                          </p>
-                        </div>
-                        <Badge className={getStatusColor(licitacao.status as keyof StatusColors)}>
-                          {getStatusLabel(licitacao.status as keyof StatusLabels)}
-                        </Badge>
-                      </div>
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-center">
-                          <div className="font-semibold">{licitacao.valor}</div>
-                          <Button size="sm" variant="outline" className="gap-1">
-                            Ver detalhes
-                            <ChevronRight className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                  {licitacoesRelacionadas.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">Nenhuma licitação encontrada para este órgão</div>
+                  {licitacoesDoOrgao.length === 0 ? (
+                    <p className="text-gray-500">Nenhuma licitação relacionada encontrada.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="px-4 py-2 text-left font-medium text-gray-500">Título</th>
+                            <th className="px-4 py-2 text-left font-medium text-gray-500">Status</th>
+                            <th className="px-4 py-2 text-left font-medium text-gray-500">Data de Abertura</th>
+                            <th className="px-4 py-2 text-left font-medium text-gray-500">Valor Estimado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {licitacoesDoOrgao.map((licitacao) => (
+                            <tr key={licitacao.id} className="border-b border-gray-200 hover:bg-gray-50">
+                              <td className="px-4 py-2">{licitacao.titulo}</td>
+                              <td className="px-4 py-2">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  licitacao.status === 'Em andamento' ? 'bg-blue-100 text-blue-800' :
+                                  licitacao.status === 'Encerrado' ? 'bg-red-100 text-red-800' :
+                                  licitacao.status === 'Publicado' ? 'bg-green-100 text-green-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {licitacao.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2">
+                                {licitacao.data_abertura ? new Date(licitacao.data_abertura).toLocaleDateString('pt-BR') : '-'}
+                              </td>
+                              <td className="px-4 py-2">
+                                {licitacao.valor_estimado ? `R$ ${licitacao.valor_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>

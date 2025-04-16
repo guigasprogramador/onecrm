@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Reuniao } from '@/types/comercial';
+import sgMail from '@sendgrid/mail';
+sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
 // Simulação de banco de dados em memória
 let reunioes: Reuniao[] = [
@@ -129,7 +131,45 @@ export async function POST(request: NextRequest) {
     };
     
     reunioes.push(novaReuniao);
-    
+
+    // Busca real dos e-mails dos responsáveis se vierem apenas os IDs
+    let emailsResponsaveis: string[] = [];
+    if (Array.isArray(data.emailResponsavel) && data.emailResponsavel.length > 0) {
+      emailsResponsaveis = data.emailResponsavel;
+    } else if (Array.isArray(data.responsaveisIds) && data.responsaveisIds.length > 0) {
+      // Busca real via API
+      const fetchResponsaveis = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/comercial/responsaveis`);
+      const todosResponsaveis = await fetchResponsaveis.json();
+      emailsResponsaveis = todosResponsaveis.filter((r: any) => data.responsaveisIds.includes(r.id)).map((r: any) => r.email);
+    }
+    let emailCliente = data.emailCliente;
+    if ((!emailCliente || emailCliente === "") && data.clienteId) {
+      // Busca real via API
+      const fetchCliente = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/comercial/clientes/${data.clienteId}`);
+      if (fetchCliente.ok) {
+        const cliente = await fetchCliente.json();
+        emailCliente = cliente.contatoEmail || cliente.email;
+      }
+    }
+    const destinatarios = [...emailsResponsaveis, emailCliente].filter(Boolean);
+    const emailBody = `
+      <h2>Nova reunião agendada</h2>
+      <p><b>Título:</b> ${novaReuniao.titulo}</p>
+      <p><b>Data:</b> ${novaReuniao.data} às ${novaReuniao.hora}</p>
+      <p><b>Local:</b> ${novaReuniao.local}</p>
+      <p><b>Participantes:</b> ${novaReuniao.participantes.join(', ')}</p>
+      <p><b>Pauta:</b> ${novaReuniao.notas}</p>
+    `;
+    try {
+      await sgMail.send({
+        to: destinatarios,
+        from: process.env.SENDGRID_FROM_EMAIL || 'noreply@seudominio.com',
+        subject: 'Novo Agendamento de Reunião',
+        html: emailBody,
+      });
+    } catch (emailError) {
+      console.error('Erro ao enviar e-mail via SendGrid:', emailError);
+    }
     return NextResponse.json(novaReuniao, { status: 201 });
   } catch (error) {
     console.error('Erro ao criar reunião:', error);

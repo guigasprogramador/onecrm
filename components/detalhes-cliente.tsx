@@ -240,47 +240,123 @@ export function DetalhesCliente({ cliente, open, onOpenChange, onClienteUpdate, 
                     <Card>
                       <CardContent className="p-4">
                         <h3 className="text-base font-semibold mb-3">Dados Gerais</h3>
-                        <div className="space-y-2">
-                          <div className="flex items-start">
-                            <Building className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
-                            <div>
-                              <p className="text-sm font-medium">{clienteDetalhes.nome}</p>
-                              <p className="text-xs text-muted-foreground">{clienteDetalhes.tipo}</p>
-                            </div>
-                          </div>
-                          
-                          {clienteDetalhes.cnpj && (
+                        {isEditing ? (
+                          <div className="space-y-2">
                             <div className="flex items-start">
-                              <Hash className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
+                              <Building className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
                               <div>
-                                <p className="text-sm">{clienteDetalhes.cnpj}</p>
-                                <p className="text-xs text-muted-foreground">CNPJ</p>
+                                <Input
+                                  className="text-sm font-medium"
+                                  value={editedCliente?.nome || ''}
+                                  onChange={e => setEditedCliente(editedCliente && { ...editedCliente, nome: e.target.value })}
+                                  placeholder="Nome do Cliente"
+                                />
+                                <Select
+                                  value={editedCliente?.tipo || ''}
+                                  onValueChange={value => setEditedCliente(editedCliente && { ...editedCliente, tipo: value })}
+                                >
+                                  <SelectTrigger className="text-xs">
+                                    <SelectValue placeholder="Tipo de Cliente" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {tiposCliente.map(tipo => (
+                                      <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                             </div>
-                          )}
-                          
-                          {clienteDetalhes.endereco && (
+                            <div className="flex items-start">
+                              <Hash className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
+                              <Input
+                                className="text-sm"
+                                value={editedCliente?.cnpj || ''}
+                                onChange={e => setEditedCliente(editedCliente && { ...editedCliente, cnpj: e.target.value })}
+                                placeholder="CNPJ"
+                              />
+                            </div>
                             <div className="flex items-start">
                               <MapPin className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
                               <div>
-                                <p className="text-sm">{clienteDetalhes.endereco}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {[clienteDetalhes.cidade, clienteDetalhes.estado].filter(Boolean).join(' - ')}
-                                </p>
+                                <Input
+                                  className="text-sm"
+                                  value={editedCliente?.endereco || ''}
+                                  onChange={e => setEditedCliente(editedCliente && { ...editedCliente, endereco: e.target.value })}
+                                  placeholder="Endereço"
+                                />
+                                <div className="flex gap-2 mt-1">
+                                  <Input
+                                    className="text-xs"
+                                    value={editedCliente?.cidade || ''}
+                                    onChange={e => setEditedCliente(editedCliente && { ...editedCliente, cidade: e.target.value })}
+                                    placeholder="Cidade"
+                                  />
+                                  <Select
+                                    value={editedCliente?.estado || ''}
+                                    onValueChange={value => setEditedCliente(editedCliente && { ...editedCliente, estado: value })}
+                                  >
+                                    <SelectTrigger className="text-xs w-20">
+                                      <SelectValue placeholder="Estado" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {estados.map(uf => (
+                                        <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                             </div>
-                          )}
-                          
-                          {clienteDetalhes.segmento && (
                             <div className="flex items-start">
                               <DollarSign className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
+                              <Input
+                                className="text-sm"
+                                value={editedCliente?.segmento || ''}
+                                onChange={e => setEditedCliente(editedCliente && { ...editedCliente, segmento: e.target.value })}
+                                placeholder="Segmento"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-start">
+                              <Building className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
                               <div>
-                                <p className="text-sm">{clienteDetalhes.segmento}</p>
-                                <p className="text-xs text-muted-foreground">Segmento</p>
+                                <p className="text-sm font-medium">{clienteDetalhes.nome}</p>
+                                <p className="text-xs text-muted-foreground">{clienteDetalhes.tipo}</p>
                               </div>
                             </div>
-                          )}
-                        </div>
+                            {clienteDetalhes.cnpj && (
+                              <div className="flex items-start">
+                                <Hash className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm">{clienteDetalhes.cnpj}</p>
+                                  <p className="text-xs text-muted-foreground">CNPJ</p>
+                                </div>
+                              </div>
+                            )}
+                            {clienteDetalhes.endereco && (
+                              <div className="flex items-start">
+                                <MapPin className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm">{clienteDetalhes.endereco}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {[clienteDetalhes.cidade, clienteDetalhes.estado].filter(Boolean).join(' - ')}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            {clienteDetalhes.segmento && (
+                              <div className="flex items-start">
+                                <DollarSign className="h-4 w-4 mr-2 mt-0.5 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm">{clienteDetalhes.segmento}</p>
+                                  <p className="text-xs text-muted-foreground">Segmento</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
 
@@ -387,16 +463,29 @@ export function DetalhesCliente({ cliente, open, onOpenChange, onClienteUpdate, 
                     )}
                   </div>
 
-                  <div className="mt-6 flex justify-end space-x-2">
-                    <Button variant="outline" onClick={handleEditClick}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Editar Cliente
-                    </Button>
-                    <Button variant="destructive" onClick={handleDeleteClick}>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Excluir Cliente
-                    </Button>
-                  </div>
+                  {isEditing ? (
+                    <div className="mt-6 flex justify-end space-x-2">
+                      <Button variant="success" onClick={handleSaveClick}>
+                        <Save className="h-4 w-4 mr-2" />
+                        Salvar
+                      </Button>
+                      <Button variant="outline" onClick={handleCancelEdit}>
+                        <X className="h-4 w-4 mr-2" />
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mt-6 flex justify-end space-x-2">
+                      <Button variant="outline" onClick={handleEditClick}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Editar Cliente
+                      </Button>
+                      <Button variant="destructive" onClick={handleDeleteClick}>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir Cliente
+                      </Button>
+                    </div>
+                  )}
                 </TabsContent>
 
                 {/* Aba de Informações */}

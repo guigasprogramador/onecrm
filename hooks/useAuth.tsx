@@ -51,21 +51,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Verifica se há um refreshToken nos cookies
-        const cookies = document.cookie.split(';');
-        const refreshTokenCookie = cookies.find(cookie => cookie.trim().startsWith('refreshToken='));
-        
-        if (!refreshTokenCookie) {
-          console.log("Nenhum refresh token encontrado");
+        // 1. Tenta restaurar do localStorage
+        const accessToken = localStorage.getItem('accessToken');
+        const userJson = localStorage.getItem('user');
+        if (accessToken && userJson) {
+          setUser(JSON.parse(userJson));
+          setIsAuthenticated(true);
           setLoading(false);
           return;
         }
 
+        // 2. Se não houver no localStorage, tenta via refreshToken/cookie
+        const cookies = document.cookie.split(';');
+        const refreshTokenCookie = cookies.find(cookie => cookie.trim().startsWith('refreshToken='));
+        if (!refreshTokenCookie) {
+          setLoading(false);
+          return;
+        }
         await refreshToken();
       } catch (error) {
-        console.error("Erro ao verificar autenticação:", error);
-        await logout();
-      } finally {
+        setUser(null);
+        setIsAuthenticated(false);
         setLoading(false);
       }
     };
@@ -161,6 +167,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       setUser(data.user);
       setIsAuthenticated(true);
       localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('user', JSON.stringify(data.user));
       
       toast.success("Login realizado com sucesso!");
       router.push("/dashboard");
@@ -204,7 +211,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       // Limpa o estado local
       setUser(null);
       setIsAuthenticated(false);
-      localStorage.clear();
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('user');
       
       // Remove os cookies de autenticação
       document.cookie = "accessToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";

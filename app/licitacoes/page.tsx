@@ -847,6 +847,7 @@ export default function LicitacoesPage() {
         <DetalhesOrgao
           key={`orgao-${selectedOrgao.id}`}
           orgao={selectedOrgao}
+          licitacao={selectedLicitacao}
           open={orgaoDetailsOpen}
           onOpenChange={(open) => {
             setOrgaoDetailsOpen(open)

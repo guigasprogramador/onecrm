@@ -52,12 +52,19 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
   // Estado para arquivos anexados
   const [arquivoSelecionado, setArquivoSelecionado] = useState<File | null>(null)
   
-  // Carregar licitações quando o diálogo for aberto
+  // Carregar licitações quando o componente montar e não apenas quando o diálogo for aberto
   useEffect(() => {
-    if (open) {
+    // Tentar carregar as licitações imediatamente ao montar o componente
+    fetchLicitacoes()
+  }, [fetchLicitacoes])
+  
+  // Efeito adicional para abrir o diálogo
+  useEffect(() => {
+    if (open && licitacoes.length === 0 && !loadingLicitacoes) {
+      // Se abrir o diálogo e não tiver licitações carregadas ainda, tenta carregar novamente
       fetchLicitacoes()
     }
-  }, [open, fetchLicitacoes])
+  }, [open, licitacoes.length, loadingLicitacoes, fetchLicitacoes])
 
   // Funções de manipulação de formulário
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -173,12 +180,12 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-[#1B3A53] hover:bg-[#2c5a80]">
-          <Plus className="mr-2 h-4 w-4" />
+        <Button variant="default" className="bg-primary text-white">
+          <Plus className="h-4 w-4 mr-2" />
           Novo Documento
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[580px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adicionar Novo Documento</DialogTitle>
           <DialogDescription>
@@ -187,8 +194,8 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 py-4 overflow-y-auto max-h-[60vh]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="nome">
                 Nome do Documento <span className="text-red-500">*</span>
@@ -196,7 +203,7 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
               <Input
                 id="nome"
                 name="nome"
-                placeholder="Nome do documento"
+                placeholder="Ex: Contrato de Prestação de Serviços"
                 value={formData.nome}
                 onChange={handleInputChange}
                 required
@@ -206,33 +213,37 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
               <Label htmlFor="tipo">
                 Tipo <span className="text-red-500">*</span>
               </Label>
-              <Select value={formData.tipo} onValueChange={(value) => handleSelectChange("tipo", value)} required>
-                <SelectTrigger id="tipo">
+              <Select name="tipo" value={formData.tipo} onValueChange={(value) => handleSelectChange("tipo", value)}>
+                <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Edital">Edital</SelectItem>
                   <SelectItem value="Contrato">Contrato</SelectItem>
+                  <SelectItem value="Edital">Edital</SelectItem>
                   <SelectItem value="Proposta">Proposta</SelectItem>
                   <SelectItem value="Certidão">Certidão</SelectItem>
                   <SelectItem value="Nota Fiscal">Nota Fiscal</SelectItem>
-                  <SelectItem value="Relatório">Relatório</SelectItem>
+                  <SelectItem value="Atestado">Atestado</SelectItem>
+                  <SelectItem value="Declaração">Declaração</SelectItem>
                   <SelectItem value="Apresentação">Apresentação</SelectItem>
                   <SelectItem value="Planilha">Planilha</SelectItem>
                   <SelectItem value="Documento Legal">Documento Legal</SelectItem>
+                  <SelectItem value="Ata">Ata</SelectItem>
+                  <SelectItem value="Relatório">Relatório</SelectItem>
+                  <SelectItem value="Parecer">Parecer</SelectItem>
                   <SelectItem value="Outro">Outro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="categoria">
                 Categoria <span className="text-red-500">*</span>
               </Label>
               <Select value={formData.categoria} onValueChange={(value) => handleSelectChange("categoria", value)} required>
-                <SelectTrigger id="categoria">
+                <SelectTrigger>
                   <SelectValue placeholder="Selecione a categoria" />
                 </SelectTrigger>
                 <SelectContent>
@@ -247,17 +258,22 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="licitacao">Licitação (opcional)</Label>
-              <Select value={formData.licitacao} onValueChange={(value) => handleSelectChange("licitacao", value)}>
-                <SelectTrigger id="licitacao">
+              <Select
+                value={formData.licitacao}
+                onValueChange={(value) => handleSelectChange("licitacao", value)}
+              >
+                <SelectTrigger
+                  id="licitacao"
+                  className={loadingLicitacoes ? "animate-pulse" : ""}
+                >
                   <SelectValue placeholder="Vincular à licitação" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sem_licitacao">Não vincular</SelectItem>
-                  
                   {loadingLicitacoes ? (
-                    <div className="flex items-center justify-center py-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
-                      <span className="text-muted-foreground text-sm">Carregando licitações...</span>
+                    <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                      Carregando licitações...
                     </div>
                   ) : licitacoes && licitacoes.length > 0 ? (
                     licitacoes.map((licitacao) => (
@@ -287,7 +303,7 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="numeroDocumento">Número do Documento</Label>
               <Input
@@ -343,7 +359,7 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
           </div>
         </div>
 
-        <DialogFooter className="flex justify-between items-center">
+        <DialogFooter className="sticky bottom-0 bg-white pt-4 pb-2 border-t mt-2">
           <div className="text-sm text-muted-foreground">
             <span className="text-red-500">*</span> Campos obrigatórios
           </div>

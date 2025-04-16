@@ -484,7 +484,9 @@ export default function ComercialPage() {
       }
 
       const cliente = await response.json()
+      // Atualizar ambos os estados para garantir compatibilidade
       setClienteSelecionado(cliente)
+      setSelectedCliente(cliente)
       
       // Buscar oportunidades do cliente
       const responseOp = await fetch(`/api/comercial/oportunidades?clienteId=${clienteId}`)

@@ -57,10 +57,10 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
     responsavel: "", // Adicionando campo para responsável
   })
 
-  // Estados para datas
-  const [dataPublicacao, setDataPublicacao] = useState<Date | undefined>()
-  const [prazoEnvio, setPrazoEnvio] = useState<Date | undefined>()
-  const [dataJulgamento, setDataJulgamento] = useState<Date | undefined>()
+  // Estados para datas - inicializando com string vazia para evitar erro de input não controlado para controlado
+  const [dataPublicacao, setDataPublicacao] = useState<Date | undefined>(undefined)
+  const [prazoEnvio, setPrazoEnvio] = useState<Date | undefined>(undefined)
+  const [dataJulgamento, setDataJulgamento] = useState<Date | undefined>(undefined)
 
   // Estados para documentos e responsáveis
   const [documentosNecessarios, setDocumentosNecessarios] = useState([
@@ -207,14 +207,14 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
       }
     } else {
       // Validação para formulário completo
-      if (!formData.nome || !formData.orgao || !prazoEnvio || !dataJulgamento || !formData.tipo) {
-        alert("Por favor, preencha todos os campos obrigatórios.");
-        return;
-      }
+    if (!formData.nome || !formData.orgao || !prazoEnvio || !dataJulgamento || !formData.tipo) {
+      alert("Por favor, preencha todos os campos obrigatórios.");
+      return;
+    }
 
-      if(formData.tipo === "produto" && !formData.tipoFaturamento) {
-        alert("Por favor, selecione o tipo de faturamento.");
-        return;
+    if(formData.tipo === "produto" && !formData.tipoFaturamento) {
+      alert("Por favor, selecione o tipo de faturamento.");
+      return;
       }
     }
 
@@ -434,7 +434,8 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
                       console.log("Data selecionada:", date);
                       setPrazoEnvio(date);
                     } else {
-                      setPrazoEnvio(undefined);
+                      // Usar null em vez de undefined para manter o input controlado
+                      setPrazoEnvio(null as unknown as undefined);
                     }
                   }}
                   required
@@ -455,7 +456,8 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
                       console.log("Data de publicação selecionada:", date);
                       setDataPublicacao(date);
                     } else {
-                      setDataPublicacao(undefined);
+                      // Usar null em vez de undefined para manter o input controlado
+                      setDataPublicacao(null as unknown as undefined);
                     }
                   }}
                 />
@@ -475,7 +477,8 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
                       console.log("Data de julgamento selecionada:", date);
                       setDataJulgamento(date);
                     } else {
-                      setDataJulgamento(undefined);
+                      // Usar null em vez de undefined para manter o input controlado
+                      setDataJulgamento(null as unknown as undefined);
                     }
                   }}
                   required
@@ -624,7 +627,8 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
                       console.log("Data de publicação selecionada:", date);
                       setDataPublicacao(date);
                     } else {
-                      setDataPublicacao(undefined);
+                      // Usar null em vez de undefined para manter o input controlado
+                      setDataPublicacao(null as unknown as undefined);
                     }
                   }}
                 />
@@ -642,10 +646,11 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
                   onChange={(e) => {
                     if (e.target.value) {
                       const date = new Date(e.target.value);
-                      console.log("Prazo para envio selecionado:", date);
+                      console.log("Data selecionada:", date);
                       setPrazoEnvio(date);
                     } else {
-                      setPrazoEnvio(undefined);
+                      // Usar null em vez de undefined para manter o input controlado
+                      setPrazoEnvio(null as unknown as undefined);
                     }
                   }}
                   required
@@ -667,7 +672,8 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
                       console.log("Data de julgamento selecionada:", date);
                       setDataJulgamento(date);
                     } else {
-                      setDataJulgamento(undefined);
+                      // Usar null em vez de undefined para manter o input controlado
+                      setDataJulgamento(null as unknown as undefined);
                     }
                   }}
                   required

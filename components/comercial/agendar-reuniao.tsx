@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -53,9 +53,34 @@ export function AgendarReuniao({
   // Estado para armazenar os participantes da reunião
   const [participantes, setParticipantes] = useState<string>(oportunidade.responsavel)
   
+  // Estado para armazenar o e-mail do cliente
+  const [emailCliente, setEmailCliente] = useState(oportunidade.clienteEmail || (oportunidade.cliente && oportunidade.cliente.email) || "");
+  const [erroEmailCliente, setErroEmailCliente] = useState<string>("");
+  
+  // Estado para armazenar os responsáveis
+  const [responsaveisOpcoes, setResponsaveisOpcoes] = useState<any[]>([]);
+  const [responsaveisSelecionados, setResponsaveisSelecionados] = useState<any[]>([]);
+  const [erroResponsaveis, setErroResponsaveis] = useState<string>("");
+
+  // Buscar responsáveis para autocomplete
+  useEffect(() => {
+    const buscarResponsaveis = async () => {
+      const resp = await fetch("/api/comercial/responsaveis");
+      const data = await resp.json();
+      setResponsaveisOpcoes(data);
+    };
+    buscarResponsaveis();
+  }, []);
+
+  // Validação de e-mail simples
+  const validarEmail = (email: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+
   // Função para lidar com o agendamento da reunião
-  const handleAgendar = () => {
+  const handleAgendar = async () => {
     // Validação dos campos
+    let erro = false;
+    setErroEmailCliente("");
+    setErroResponsaveis("");
     if (!data) {
       toast({
         title: "Erro",
@@ -64,7 +89,16 @@ export function AgendarReuniao({
       })
       return
     }
-    
+    if (!emailCliente || !validarEmail(emailCliente)) {
+      setErroEmailCliente("E-mail do cliente inválido");
+      erro = true;
+    }
+    const emailsResponsaveis = responsaveisSelecionados.map(r => r.email);
+    if (emailsResponsaveis.length === 0 || emailsResponsaveis.some(email => !validarEmail(email))) {
+      setErroResponsaveis("Selecione pelo menos um responsável com e-mail válido");
+      erro = true;
+    }
+    if (erro) return;
     // Construir objeto de reunião
     const reuniao = {
       oportunidadeId: oportunidade.id,
@@ -80,38 +114,46 @@ export function AgendarReuniao({
       cliente: oportunidade.cliente,
       clienteId: oportunidade.clienteId,
       status: "agendada",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      emailResponsavel: emailsResponsaveis,
+      emailCliente: emailCliente,
+      responsaveisIds: responsaveisSelecionados.map(r => r.id)
     }
-    
-    // Aqui você faria a chamada para a API para agendar a reunião
-    // Por exemplo: await api.post("/api/comercial/reunioes", reuniao)
-    
-    // Para demonstração, vamos apenas simular o sucesso e fechar o modal
-    console.log("Reunião agendada:", reuniao)
-    
-    // Chamar callback se fornecido
-    if (onReuniaoAgendada) {
-      onReuniaoAgendada(reuniao)
+    try {
+      const response = await fetch("/api/comercial/reunioes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reuniao)
+      });
+      if (!response.ok) {
+        throw new Error("Erro ao agendar reunião");
+      }
+      const reuniaoCriada = await response.json();
+      if (onReuniaoAgendada) {
+        onReuniaoAgendada(reuniaoCriada)
+      }
+      toast({
+        title: "Reunião agendada",
+        description: `Reunião agendada para ${format(data, "PPP", { locale: ptBR })} às ${hora}`,
+      })
+      onOpenChange(false)
+      setData(addDays(new Date(), 1))
+      setHora("09:00")
+      setDuracao("30")
+      setLocal("online")
+      setLink("")
+      setEndereco("")
+      setPauta("")
+      setParticipantes(oportunidade.responsavel)
+      setEmailCliente("")
+      setResponsaveisSelecionados([])
+    } catch (error) {
+      toast({
+        title: "Erro ao agendar reunião",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      })
     }
-    
-    // Mostrar notificação de sucesso
-    toast({
-      title: "Reunião agendada",
-      description: `Reunião agendada para ${format(data, "PPP", { locale: ptBR })} às ${hora}`,
-    })
-    
-    // Fechar o modal
-    onOpenChange(false)
-    
-    // Limpar os campos
-    setData(addDays(new Date(), 1))
-    setHora("09:00")
-    setDuracao("30")
-    setLocal("online")
-    setLink("")
-    setEndereco("")
-    setPauta("")
-    setParticipantes(oportunidade.responsavel)
   }
   
   return (
@@ -240,6 +282,39 @@ export function AgendarReuniao({
               onChange={(e) => setPauta(e.target.value)}
               className="min-h-[100px]"
             />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="emailCliente">E-mail do Cliente</Label>
+            <Input
+              id="emailCliente"
+              type="email"
+              value={emailCliente}
+              onChange={(e) => setEmailCliente(e.target.value)}
+              placeholder="cliente@exemplo.com"
+              className={erroEmailCliente ? "border-red-500" : ""}
+            />
+            {erroEmailCliente && <span className="text-xs text-red-500">{erroEmailCliente}</span>}
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="responsaveis">Responsáveis</Label>
+            <div>
+              <select
+                multiple
+                value={responsaveisSelecionados.map(r => r.id)}
+                onChange={e => {
+                  const selecionados = Array.from(e.target.selectedOptions).map(opt => responsaveisOpcoes.find(r => r.id === opt.value));
+                  setResponsaveisSelecionados(selecionados.filter(Boolean));
+                }}
+                className="w-full h-24 border rounded"
+              >
+                {responsaveisOpcoes.map(r => (
+                  <option key={r.id} value={r.id}>{r.nome} ({r.email})</option>
+                ))}
+              </select>
+            </div>
+            {erroResponsaveis && <span className="text-xs text-red-500">{erroResponsaveis}</span>}
           </div>
         </div>
         
