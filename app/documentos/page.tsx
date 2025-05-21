@@ -321,7 +321,7 @@ export default function DocumentosPage() {
       const docData = {
         nome: novoDocumento.nome,
         tipo: novoDocumento.tipo,
-        categoria: novoDocumento.categoria,
+        categorias: novoDocumento.categorias, // Ajustado para usar o array de categorias
         descricao: novoDocumento.descricao,
         licitacaoId: novoDocumento.licitacaoId,
         numeroDocumento: novoDocumento.numeroDocumento,
@@ -330,6 +330,8 @@ export default function DocumentosPage() {
         arquivo: arquivo
       }
 
+      console.log("Enviando documento com categorias:", docData.categorias);
+      
       // Enviar documento para a API
       const resultado = await uploadDocument(docData)
       

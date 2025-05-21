@@ -4,6 +4,10 @@ import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
+import Image from "next/image"
+import Logo from "@/components/logo" // Import the Logo component
+import { LogOut } from "lucide-react"
+import { useAuth } from "@/hooks/useAuth"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -206,7 +210,31 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <div className="flex h-full w-full flex-col">
+              <div className="flex items-center justify-center py-4">
+                {state === "collapsed" ? (
+                  <Image
+                    src="/logo-menu-recuado.png"
+                    alt="Logo Menu Recuado"
+                    width={48}
+                    height={48}
+                    priority
+                    className="mx-auto"
+                  />
+                ) : (
+                  <Image
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Group%2077-mQmBag2LOsdRnSi3pwvTTD66B4OeGh.png"
+                    alt="OneFlow Logo"
+                    width={120}
+                    height={40}
+                    className="h-8 object-contain mx-auto"
+                    priority
+                  />
+                )}
+              </div>
+              {children}
+              <SidebarFooter />
+            </div>
           </SheetContent>
         </Sheet>
       )
@@ -234,7 +262,7 @@ const Sidebar = React.forwardRef<
         />
         <div
           className={cn(
-            "duration-200 fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] ease-linear md:flex",
+            "duration-200 fixed inset-y-0 z-10 hidden w-[--sidebar-width] transition-[left,right,width] ease-linear md:flex",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -250,7 +278,29 @@ const Sidebar = React.forwardRef<
             data-sidebar="sidebar"
             className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow"
           >
+            <div className="flex items-center justify-center py-4">
+              {state === "collapsed" ? (
+                <Image
+                  src="/logo-menu-recuado.png"
+                  alt="Logo Menu Recuado"
+                  width={48}
+                  height={48}
+                  priority
+                  className="mx-auto"
+                />
+              ) : (
+                <Image
+                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Group%2077-mQmBag2LOsdRnSi3pwvTTD66B4OeGh.png"
+                  alt="OneFlow Logo"
+                  width={120}
+                  height={40}
+                  className="h-8 object-contain mx-auto"
+                  priority
+                />
+              )}
+            </div>
             {children}
+            <SidebarFooter />
           </div>
         </div>
       </div>
@@ -300,7 +350,7 @@ const SidebarRail = React.forwardRef<
       onClick={toggleSidebar}
       title="Toggle Sidebar"
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
+        "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
         "[[data-side=left]_&]:cursor-w-resize [[data-side=right]_&]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full group-data-[collapsible=offcanvas]:hover:bg-sidebar",
@@ -365,19 +415,28 @@ const SidebarHeader = React.forwardRef<
 })
 SidebarHeader.displayName = "SidebarHeader"
 
-const SidebarFooter = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<"div">
->(({ className, ...props }, ref) => {
+const SidebarFooter = () => {
+  const { logout } = useAuth();
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      window.location.href = 'http://127.0.0.1:59495/auth/login';
+    }
+  };
   return (
-    <div
-      ref={ref}
-      data-sidebar="footer"
-      className={cn("flex flex-col gap-2 p-2", className)}
-      {...props}
-    />
-  )
-})
+    <div className="mt-auto p-4">
+      <button
+        className="inline-flex items-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:text-accent-foreground h-10 px-4 py-2 w-full justify-start text-white hover:bg-white/10 bg-white/10"
+        onClick={handleLogout}
+        type="button"
+      >
+        <LogOut className="h-5 w-5 mr-3" />
+        Sair da conta
+      </button>
+    </div>
+  );
+};
 SidebarFooter.displayName = "SidebarFooter"
 
 const SidebarSeparator = React.forwardRef<

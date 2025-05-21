@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -24,8 +22,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
-import { Plus, CalendarIcon, Save, LinkIcon, FileText, Calculator, Mail, Clock, Loader2 } from "lucide-react"
+import { Plus, CalendarIcon, Save, LinkIcon, FileText, Calculator, Mail, Clock, Loader2, Check, Search } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { Toggle } from "@/components/ui/toggle"
+import { SeletorDocumentosLicitacao } from "@/components/licitacoes/seletor-documentos-licitacao"
+import { DocumentType, useDocuments } from "@/hooks/useDocuments"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface NovaLicitacaoProps {
   onLicitacaoAdded?: (licitacao: any) => void
@@ -35,7 +37,7 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("dados-basicos")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSimplifiedForm, setIsSimplifiedForm] = useState(false)
+  const [isSimplifiedForm, setIsSimplifiedForm] = useState(true)
 
   // Estados para os campos do formulário
   const [formData, setFormData] = useState({
@@ -83,8 +85,7 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
 
   // Estado para arquivos anexados
   const [arquivosAnexados, setArquivosAnexados] = useState<File[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estado para simulação de impostos
   const [impostos, setImpostos] = useState({
@@ -98,6 +99,133 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
   // Estado para criar evento no calendário
   const [criarEvento, setCriarEvento] = useState(true)
   const [enviarNotificacoes, setEnviarNotificacoes] = useState(true)
+
+  // Estado para documentos selecionados do repositório
+  const [documentosRepositorio, setDocumentosRepositorio] = useState<DocumentType[]>([])
+
+  // Estados para o seletor de documentos
+  const [documentos, setDocumentos] = useState<DocumentType[]>([])
+  const [documentosFiltrados, setDocumentosFiltrados] = useState<DocumentType[]>([])
+  const [documentosSelecionados, setDocumentosSelecionados] = useState<string[]>([])
+  const [termoBusca, setTermoBusca] = useState("")
+  const [carregandoDocs, setCarregandoDocs] = useState(true)
+  
+  // Estado de loading para o upload de arquivos
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  
+  const { fetchDocuments } = useDocuments()
+
+  // Carregar documentos com a tag "licitacao" ao montar o componente
+  useEffect(() => {
+    const carregarDocumentos = async () => {
+      try {
+        console.log("Iniciando carregamento de documentos...");
+        setCarregandoDocs(true);
+        
+        // Verificar token de autenticação
+        const token = localStorage.getItem('accessToken');
+        console.log("Token de autenticação:", token ? "Presente" : "Ausente");
+        
+        // Buscar todos os documentos (sem filtro)
+        const todosDocumentos = await fetchDocuments();
+        console.log("Documentos carregados:", todosDocumentos ? todosDocumentos.length : 0);
+        
+        if (todosDocumentos && todosDocumentos.length > 0) {
+          console.log("Exemplo de documento:", todosDocumentos[0]);
+          
+          // Filtrar documentos que contêm a tag "licitacao" (podendo ter outras também)
+          const docsLicitacao = todosDocumentos.filter((doc: DocumentType) => {
+            // Verificar se categorias é um array
+            if (Array.isArray(doc.categorias)) {
+              return doc.categorias.includes('licitacao');
+            }
+            
+            // Verificar no campo categoria (string separada por vírgulas)
+            if (typeof doc.categoria === 'string') {
+              const categorias = doc.categoria.split(',').map((c: string) => c.trim());
+              return categorias.includes('licitacao');
+            }
+            
+            return false;
+          });
+          
+          console.log("Documentos com tag licitacao:", docsLicitacao.length);
+          setDocumentos(docsLicitacao);
+          setDocumentosFiltrados(docsLicitacao);
+        } else {
+          console.log("Nenhum documento retornado da API");
+          setDocumentos([]);
+          setDocumentosFiltrados([]);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar documentos:", error);
+      } finally {
+        setCarregandoDocs(false);
+      }
+    };
+
+    carregarDocumentos();
+  }, [fetchDocuments])
+
+  // Filtrar documentos baseado no termo de busca
+  useEffect(() => {
+    if (!termoBusca.trim()) {
+      setDocumentosFiltrados(documentos)
+      return
+    }
+
+    const termoLowerCase = termoBusca.toLowerCase()
+    const filtrados = documentos.filter(doc => 
+      doc.nome.toLowerCase().includes(termoLowerCase) || 
+      doc.tipo.toLowerCase().includes(termoLowerCase) ||
+      (doc.descricao && doc.descricao.toLowerCase().includes(termoLowerCase))
+    )
+    
+    setDocumentosFiltrados(filtrados)
+  }, [termoBusca, documentos])
+
+  // Quando a seleção de documentos muda, atualizar documentosRepositorio
+  useEffect(() => {
+    const docsSelecionados = documentos.filter(doc => documentosSelecionados.includes(doc.id))
+    setDocumentosRepositorio(docsSelecionados)
+  }, [documentosSelecionados, documentos])
+
+  // Alternar seleção de documento
+  const toggleDocumento = (id: string) => {
+    setDocumentosSelecionados(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(docId => docId !== id)
+      } else {
+        return [...prev, id]
+      }
+    })
+  }
+
+  // Formatar tamanho do arquivo
+  const formatarTamanho = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / 1048576).toFixed(1) + ' MB'
+  }
+  
+  // Manipular seleção de arquivos
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      const novoArquivos = Array.from(e.target.files)
+      setArquivosAnexados((prev) => [...prev, ...novoArquivos])
+    }
+  }
+
+  // Abrir diálogo de seleção de arquivos
+  const handleEscolherArquivos = () => {
+    fileInputRef.current?.click()
+  }
+
+  // Remover arquivo da lista
+  const handleRemoverArquivo = (index: number) => {
+    setArquivosAnexados((prev) => prev.filter((_, i) => i !== index))
+  }
 
   // Funções de manipulação de formulário
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -117,13 +245,6 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
 
   const handleResponsavelChange = (id: string, checked: boolean) => {
     setResponsaveis(responsaveis.map((resp) => (resp.id === id ? { ...resp, selecionado: checked } : resp)))
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const filesArray = Array.from(e.target.files)
-      setArquivosAnexados((prev) => [...prev, ...filesArray])
-    }
   }
 
   const handleImpostoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -288,6 +409,8 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
             usuarioId: resp.id,
             papel: "colaborador",
           })),
+        // Adicionar IDs dos documentos do repositório
+        documentosRepositorioIds: documentosRepositorio.map(doc => doc.id),
       }
 
       // Enviar para a API
@@ -497,15 +620,121 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
                 />
               </div>
 
+              {/* Documentos do Repositório com tag "licitação" */}
               <div className="grid gap-2">
-                <Label htmlFor="documentos">Documentos</Label>
-                <Input 
-                  id="documentos" 
-                  type="file" 
-                  multiple 
-                  onChange={handleFileChange}
-                  className="cursor-pointer" 
-                />
+                <Label className="text-base font-medium">Documentos com tag "licitação"</Label>
+                <div className="border rounded-md overflow-hidden">
+                  <div className="p-3 flex items-center justify-between">
+                    <div className="relative flex-1">
+                      <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-gray-500" />
+                      <Input
+                        type="text"
+                        placeholder="Buscar documentos..."
+                        value={termoBusca}
+                        onChange={(e) => setTermoBusca(e.target.value)}
+                        className="pl-8 h-9 text-sm"
+                      />
+                    </div>
+                    <Badge variant="outline" className="bg-white ml-2">
+                      {documentosSelecionados.length} selecionados
+                    </Badge>
+                  </div>
+                  
+                  {carregandoDocs ? (
+                    <div className="p-4 text-center">
+                      <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full mx-auto"></div>
+                      <p className="mt-2 text-sm text-gray-500">Carregando documentos...</p>
+                    </div>
+                  ) : documentosFiltrados.length === 0 ? (
+                    <div className="p-4 text-center">
+                      <p className="text-sm text-gray-500">Nenhum documento encontrado.</p>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[200px]">
+                      <div className="divide-y">
+                        {documentosFiltrados.map((doc) => (
+                          <div 
+                            key={doc.id} 
+                            className={`p-2 flex items-start hover:bg-gray-50 cursor-pointer ${
+                              documentosSelecionados.includes(doc.id) ? 'bg-blue-50' : ''
+                            }`}
+                            onClick={() => toggleDocumento(doc.id)}
+                          >
+                            <Checkbox 
+                              checked={documentosSelecionados.includes(doc.id)}
+                              onCheckedChange={() => toggleDocumento(doc.id)}
+                              className="mr-2 mt-0.5"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center">
+                                <FileText className="w-4 h-4 text-blue-500 mr-1.5 flex-shrink-0" />
+                                <p className="font-medium text-sm truncate">{doc.nome}</p>
+                              </div>
+                              <div className="flex items-center text-xs text-gray-500 mt-0.5">
+                                <span>{doc.tipo}</span>
+                                {doc.tamanho ? (
+                                  <>
+                                    <span className="mx-1">•</span>
+                                    <span>{formatarTamanho(doc.tamanho)}</span>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                            {documentosSelecionados.includes(doc.id) && (
+                              <Check className="w-4 h-4 text-green-500 ml-1 flex-shrink-0" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </div>
+              </div>
+              
+              {/* Anexar Documentos */}
+              <div className="grid gap-2">
+                <Label className="text-base font-medium">Anexar Documentos</Label>
+                <div className="border rounded-md p-3">
+                  <div className="flex items-center justify-between">
+                    <Button variant="outline" size="sm" className="mr-2" type="button" onClick={handleEscolherArquivos}>
+                      Escolher arquivos
+                    </Button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      multiple
+                    />
+                    <Badge variant="outline" className="bg-white">
+                      {arquivosAnexados.length} selecionado(s)
+                    </Badge>
+                  </div>
+                  {arquivosAnexados.length > 0 && (
+                    <div className="mt-3 space-y-1 border-t pt-2">
+                      {arquivosAnexados.map((arquivo, index) => (
+                        <div key={index} className="flex items-center text-sm p-1 hover:bg-gray-50 rounded-sm">
+                          <FileText className="h-4 w-4 mr-2 text-blue-500" />
+                          <span className="truncate max-w-[200px] flex-1">{arquivo.name}</span>
+                          <span className="text-xs text-muted-foreground ml-1 mr-2">
+                            ({Math.round(arquivo.size / 1024)} KB)
+                          </span>
+                          <Button
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0"
+                            onClick={() => handleRemoverArquivo(index)}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Os documentos serão anexados após criar a licitação
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -750,9 +979,11 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
 
           {/* Aba de Documentos */}
           <TabsContent value="documentos" className="space-y-4">
+            <div className="space-y-4">
+              {/* Documentos necessários (checklist) */}
             <div className="space-y-2">
-              <Label>Documentação Necessária</Label>
-              <div className="grid grid-cols-2 gap-2 border rounded-md p-3">
+                <Label className="text-base font-medium">Checklist de Documentos Necessários</Label>
+                <div className="grid grid-cols-2 gap-3 border rounded-md p-3">
                 {documentosNecessarios.map((doc) => (
                   <div key={doc.id} className="flex items-center space-x-2">
                     <Checkbox
@@ -768,63 +999,61 @@ export function NovaLicitacao({ onLicitacaoAdded }: NovaLicitacaoProps) {
               </div>
             </div>
 
-            <div className="border rounded-md p-4 space-y-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-500" />
-                <h3 className="font-medium">Anexar Documentos</h3>
-              </div>
-
-              <Input
-                type="file"
-                onChange={handleFileChange}
-                multiple
-                className="p-2"
+              {/* Seletor de documentos do repositório com tag "licitacao" */}
+              <SeletorDocumentosLicitacao 
+                onDocumentosSelecionados={(docs) => setDocumentosRepositorio(docs)}
               />
 
+              {/* Upload de arquivos */}
+              <div className="space-y-2 mt-6">
+                <Label className="text-base font-medium">Anexar Documentos</Label>
+                <div className="border rounded-md p-3">
+                  <div className="flex items-center">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mr-2" 
+                      type="button"
+                      onClick={handleEscolherArquivos}
+                    >
+                      Escolher arquivos
+                    </Button>
+                    <input
+                type="file"
+                      ref={fileInputRef}
+                onChange={handleFileChange}
+                      className="hidden"
+                multiple
+              />
+                    <span className="text-sm text-muted-foreground">
+                      {arquivosAnexados.length ? `${arquivosAnexados.length} arquivo(s) selecionado(s)` : "Nenhum arquivo escolhido"}
+                    </span>
+                  </div>
               {arquivosAnexados.length > 0 && (
-                <div className="space-y-3 border-t pt-3">
-                  <h4 className="text-sm font-medium">Arquivos Selecionados</h4>
-                  <ul className="space-y-1 text-sm">
-                    {arquivosAnexados.map((file, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        <span className="truncate max-w-[250px]">{file.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          ({Math.round(file.size / 1024)} KB)
+                    <div className="mt-2 space-y-1">
+                      {arquivosAnexados.map((arquivo, index) => (
+                        <div key={index} className="flex items-center text-sm">
+                          <FileText className="h-3 w-3 mr-1" />
+                          <span className="truncate max-w-[200px]">{arquivo.name}</span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({Math.round(arquivo.size / 1024)} KB)
                         </span>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                          onClick={() => {
-                            setArquivosAnexados(prev => prev.filter((_, i) => i !== index));
-                          }}
+                            className="h-5 w-5 p-0 ml-1"
+                            onClick={() => handleRemoverArquivo(index)}
                         >
                           ×
                         </Button>
-                      </li>
+                        </div>
                     ))}
-                  </ul>
                 </div>
               )}
-
-              {isUploading && (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span>Enviando documentos...</span>
-                    <span>{uploadProgress}%</span>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Os documentos serão anexados após criar a licitação
+                  </p>
                   </div>
-                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-600 transition-all" 
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <span>Os documentos serão anexados após criar a licitação</span>
               </div>
             </div>
           </TabsContent>

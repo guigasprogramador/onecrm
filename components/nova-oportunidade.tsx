@@ -1,8 +1,7 @@
 "use client"
 
-import type React from "react"
+import React, { useState, useRef } from "react"
 
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -23,7 +22,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
-import { Plus, CalendarIcon, Save, Mail } from "lucide-react"
+import { Plus, CalendarIcon, Save, Mail, FileText } from "lucide-react"
+import { SeletorDocumentosComercial } from "@/components/comercial/seletor-documentos-comercial"
+import { DocumentType } from "@/hooks/useDocuments"
 
 interface NovaOportunidadeProps {
   onOportunidadeAdded?: (oportunidade: any) => void
@@ -71,6 +72,22 @@ export function NovaOportunidade({ onOportunidadeAdded }: NovaOportunidadeProps)
   const [criarEvento, setCriarEvento] = useState(true)
   const [enviarNotificacoes, setEnviarNotificacoes] = useState(true)
 
+  // Estado para documentos selecionados do repositório
+  const [documentosRepositorio, setDocumentosRepositorio] = useState<DocumentType[]>([])
+
+  // Estado para documentos necessários (checklist)
+  const [documentosNecessarios, setDocumentosNecessarios] = useState([
+    { id: "doc1", nome: "Proposta Comercial", selecionado: false },
+    { id: "doc2", nome: "Contrato de Serviço", selecionado: false },
+    { id: "doc3", nome: "Ficha Cadastral", selecionado: false },
+    { id: "doc4", nome: "Termo de Confidencialidade", selecionado: false },
+    { id: "doc5", nome: "Carta de Apresentação", selecionado: false },
+  ])
+
+  // Estado para arquivos anexados
+  const [arquivosAnexados, setArquivosAnexados] = useState<File[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // Funções de manipulação de formulário
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -83,6 +100,31 @@ export function NovaOportunidade({ onOportunidadeAdded }: NovaOportunidadeProps)
 
   const handleResponsavelChange = (id: string, checked: boolean) => {
     setResponsaveis(responsaveis.map((resp) => (resp.id === id ? { ...resp, selecionado: checked } : resp)))
+  }
+
+  // Função para marcar documentos necessários no checklist
+  const handleDocumentoChange = (id: string, checked: boolean) => {
+    setDocumentosNecessarios(
+      documentosNecessarios.map((doc) => (doc.id === id ? { ...doc, selecionado: checked } : doc))
+    )
+  }
+
+  // Manipular seleção de arquivos
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      const novoArquivos = Array.from(e.target.files)
+      setArquivosAnexados(prev => [...prev, ...novoArquivos])
+    }
+  }
+
+  // Abrir diálogo de seleção de arquivos
+  const handleEscolherArquivos = () => {
+    fileInputRef.current?.click()
+  }
+
+  // Remover arquivo da lista
+  const handleRemoverArquivo = (index: number) => {
+    setArquivosAnexados(prev => prev.filter((_, i) => i !== index))
   }
 
   const validateForm = () => {
@@ -98,6 +140,8 @@ export function NovaOportunidade({ onOportunidadeAdded }: NovaOportunidadeProps)
     } else if (activeTab === "oportunidade") {
       const tipoValid = formData.tipo && (formData.tipo === "servico" || (formData.tipo === "produto" && formData.tipoFaturamento))
       return formData.titulo && formData.status && tipoValid
+    } else if (activeTab === "documentos") {
+      return true // Não há campos obrigatórios na aba de documentos
     } else if (activeTab === "reuniao") {
       return true // Não há campos obrigatórios na aba de reunião
     }
@@ -113,6 +157,8 @@ export function NovaOportunidade({ onOportunidadeAdded }: NovaOportunidadeProps)
     if (activeTab === "cliente") {
       setActiveTab("oportunidade")
     } else if (activeTab === "oportunidade") {
+      setActiveTab("documentos")
+    } else if (activeTab === "documentos") {
       setActiveTab("reuniao")
     }
   }
@@ -120,8 +166,10 @@ export function NovaOportunidade({ onOportunidadeAdded }: NovaOportunidadeProps)
   const handlePrevTab = () => {
     if (activeTab === "oportunidade") {
       setActiveTab("cliente")
-    } else if (activeTab === "reuniao") {
+    } else if (activeTab === "documentos") {
       setActiveTab("oportunidade")
+    } else if (activeTab === "reuniao") {
+      setActiveTab("documentos")
     }
   }
 
@@ -227,9 +275,10 @@ export function NovaOportunidade({ onOportunidadeAdded }: NovaOportunidadeProps)
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid grid-cols-3 mb-4">
+          <TabsList className="grid grid-cols-4 mb-6">
             <TabsTrigger value="cliente">Dados do Cliente</TabsTrigger>
             <TabsTrigger value="oportunidade">Oportunidade</TabsTrigger>
+            <TabsTrigger value="documentos">Documentos</TabsTrigger>
             <TabsTrigger value="reuniao">Agendamento</TabsTrigger>
           </TabsList>
 
@@ -450,6 +499,96 @@ export function NovaOportunidade({ onOportunidadeAdded }: NovaOportunidadeProps)
                 </Select>
               </div>
             )}
+            <div className="flex justify-between mt-4">
+              <Button variant="outline" onClick={handlePrevTab}>
+                Voltar
+              </Button>
+              <Button onClick={handleNextTab} className="bg-[#1B3A53] hover:bg-[#2c5a80]">
+                Próximo
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Nova aba de Documentos */}
+          <TabsContent value="documentos" className="space-y-4">
+            <div className="space-y-4">
+              {/* Documentos necessários (checklist) */}
+              <div className="space-y-2">
+                <Label className="text-base font-medium">Checklist de Documentos Necessários</Label>
+                <div className="grid grid-cols-2 gap-3 border rounded-md p-3">
+                  {documentosNecessarios.map((doc) => (
+                    <div key={doc.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={doc.id}
+                        checked={doc.selecionado}
+                        onCheckedChange={(checked) => handleDocumentoChange(doc.id, checked as boolean)}
+                      />
+                      <Label htmlFor={doc.id} className="font-normal">
+                        {doc.nome}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Seletor de documentos do repositório com tag "comercial" */}
+              <SeletorDocumentosComercial 
+                onDocumentosSelecionados={(docs) => setDocumentosRepositorio(docs)}
+              />
+
+              {/* Upload de arquivos */}
+              <div className="space-y-2 mt-6">
+                <Label className="text-base font-medium">Anexar Documentos</Label>
+                <div className="border rounded-md p-3">
+                  <div className="flex items-center">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mr-2" 
+                      type="button"
+                      onClick={handleEscolherArquivos}
+                    >
+                      Escolher arquivos
+                    </Button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      multiple
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {arquivosAnexados.length ? `${arquivosAnexados.length} arquivo(s) selecionado(s)` : "Nenhum arquivo escolhido"}
+                    </span>
+                  </div>
+                  {arquivosAnexados.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {arquivosAnexados.map((arquivo, index) => (
+                        <div key={index} className="flex items-center text-sm">
+                          <FileText className="h-3 w-3 mr-1" />
+                          <span className="truncate max-w-[200px]">{arquivo.name}</span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({Math.round(arquivo.size / 1024)} KB)
+                          </span>
+                          <Button
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-5 w-5 p-0 ml-1"
+                            onClick={() => handleRemoverArquivo(index)}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Os documentos serão anexados após criar a oportunidade
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-between mt-4">
               <Button variant="outline" onClick={handlePrevTab}>
                 Voltar

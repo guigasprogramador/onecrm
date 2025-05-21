@@ -1,52 +1,119 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Oportunidade, OportunidadeFiltros, OportunidadeStatus } from '@/types/comercial';
 import { supabase, crmonefactory } from '@/lib/supabase/client';
+
+// Cache para armazenar resultados de requisiu00e7u00f5es anteriores
+interface CacheItem {
+  data: Oportunidade[];
+  timestamp: number;
+  queryKey: string;
+}
+
+// Cache global para ser compartilhado entre todas as instu00e2ncias do hook
+const requestCache: Record<string, CacheItem> = {};
+
+// Tempo de expiração do cache em milissegundos (5 minutos)
+const CACHE_EXPIRATION = 5 * 60 * 1000;
 
 export function useOportunidades() {
   const [oportunidades, setOportunidades] = useState<Oportunidade[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchOportunidades = useCallback(async (filtros?: OportunidadeFiltros) => {
-    setIsLoading(true);
-    setError(null);
+  // Referência para o timeout de debounce
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Função para gerar uma chave de cache baseada nos filtros
+  const generateCacheKey = (filtros?: OportunidadeFiltros): string => {
+    if (!filtros) return 'all';
     
-    try {
-      // Construir URL com parâmetros de filtro
-      let url = '/api/comercial/oportunidades';
-      
-      if (filtros) {
-        const params = new URLSearchParams();
-        
-        if (filtros.termo) params.append('termo', filtros.termo);
-        if (filtros.status && filtros.status !== 'todos') params.append('status', filtros.status);
-        if (filtros.cliente && filtros.cliente !== 'todos') params.append('cliente', filtros.cliente);
-        if (filtros.responsavel && filtros.responsavel !== 'todos') params.append('responsavel', filtros.responsavel);
-        if (filtros.dataInicio) params.append('dataInicio', filtros.dataInicio.toISOString().split('T')[0]);
-        if (filtros.dataFim) params.append('dataFim', filtros.dataFim.toISOString().split('T')[0]);
-        
-        if (params.toString()) {
-          url += `?${params.toString()}`;
-        }
-      }
-      
-      console.log("Buscando oportunidades com URL:", url);
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error('Erro ao buscar oportunidades');
-      }
-      
-      const data = await response.json();
-      setOportunidades(data);
-      return data;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
-      console.error('Erro ao buscar oportunidades:', err);
-      return [];
-    } finally {
-      setIsLoading(false);
+    const parts = [];
+    if (filtros.termo) parts.push(`termo=${filtros.termo}`);
+    if (filtros.status && filtros.status !== 'todos') parts.push(`status=${filtros.status}`);
+    if (filtros.cliente && filtros.cliente !== 'todos') parts.push(`cliente=${filtros.cliente}`);
+    if (filtros.responsavel && filtros.responsavel !== 'todos') parts.push(`responsavel=${filtros.responsavel}`);
+    if (filtros.dataInicio) parts.push(`dataInicio=${filtros.dataInicio.toISOString().split('T')[0]}`);
+    if (filtros.dataFim) parts.push(`dataFim=${filtros.dataFim.toISOString().split('T')[0]}`);
+    
+    return parts.length ? parts.join('&') : 'all';
+  };
+
+  // Função para verificar se o cache é válido
+  const isCacheValid = (cacheItem: CacheItem): boolean => {
+    return Date.now() - cacheItem.timestamp < CACHE_EXPIRATION;
+  };
+
+  const fetchOportunidades = useCallback(async (filtros?: OportunidadeFiltros) => {
+    // Cancelar qualquer debounce anterior
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
     }
+    
+    // Aplicar debounce para evitar múltiplas requisições em sequência
+    return new Promise<Oportunidade[]>((resolve) => {
+      debounceTimeout.current = setTimeout(async () => {
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+          // Gerar chave de cache
+          const cacheKey = generateCacheKey(filtros);
+          
+          // Verificar se temos um cache válido
+          if (requestCache[cacheKey] && isCacheValid(requestCache[cacheKey])) {
+            console.log("Usando dados em cache para:", cacheKey);
+            setOportunidades(requestCache[cacheKey].data);
+            setIsLoading(false);
+            return resolve(requestCache[cacheKey].data);
+          }
+          
+          // Construir URL com parâmetros de filtro
+          let url = '/api/comercial/oportunidades';
+          
+          if (filtros) {
+            const params = new URLSearchParams();
+            
+            if (filtros.termo) params.append('termo', filtros.termo);
+            if (filtros.status && filtros.status !== 'todos') params.append('status', filtros.status);
+            if (filtros.cliente && filtros.cliente !== 'todos') params.append('cliente', filtros.cliente);
+            if (filtros.responsavel && filtros.responsavel !== 'todos') params.append('responsavel', filtros.responsavel);
+            if (filtros.dataInicio) params.append('dataInicio', filtros.dataInicio.toISOString().split('T')[0]);
+            if (filtros.dataFim) params.append('dataFim', filtros.dataFim.toISOString().split('T')[0]);
+            
+            if (params.toString()) {
+              url += `?${params.toString()}`;
+            }
+          }
+          
+          console.log("Buscando oportunidades com URL:", url);
+          const response = await fetch(url);
+          
+          if (!response.ok) {
+            throw new Error('Erro ao buscar oportunidades');
+          }
+          
+          const data = await response.json();
+          
+          // Armazenar no cache
+          requestCache[cacheKey] = {
+            data,
+            timestamp: Date.now(),
+            queryKey: cacheKey
+          };
+          
+          setOportunidades(data);
+          resolve(data);
+          return data;
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Erro desconhecido');
+          console.error('Erro ao buscar oportunidades:', err);
+          resolve([]);
+          return [];
+        } finally {
+          setIsLoading(false);
+        }
+      }, 300); // 300ms de debounce
+    });
   }, []);
 
   const getOportunidade = useCallback(async (id: string) => {

@@ -1,4 +1,4 @@
-\"use client"
+"use client"
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -45,6 +45,7 @@ interface Documento {
   status: string
   dataCriacao: string
   dataAtualizacao: string
+  categorias: string[]
 }
 
 export function DocumentosLicitacao({ licitacaoId, isEditing }: DocumentosLicitacaoProps) {
@@ -197,6 +198,9 @@ export function DocumentosLicitacao({ licitacaoId, isEditing }: DocumentosLicita
     // Aqui você pode adicionar lógica para retornar ícones diferentes baseados no formato
     return <FileText className="h-4 w-4" />
   }
+
+  // NOVO: filtro por categoria/tags
+  const filtrarPorCategoria = (docs: Documento[], categoria: string) => docs.filter(doc => doc.categorias && doc.categorias.includes(categoria));
 
   return (
     <div className="space-y-6">

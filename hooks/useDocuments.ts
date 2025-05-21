@@ -5,7 +5,7 @@ export interface DocumentType {
   id: string;
   nome: string;
   tipo: string;
-  categoria: string;
+  categorias: string[]; // array de tags/categorias
   descricao?: string;
   licitacao_id?: string;
   numero_documento?: string;
@@ -31,7 +31,7 @@ export interface DocumentFilter {
 export interface DocumentFormData {
   nome: string;
   tipo: string;
-  categoria: string;
+  categorias: string[]; // array de tags/categorias
   descricao?: string;
   licitacaoId?: string;
   numeroDocumento?: string;
@@ -142,20 +142,27 @@ export function useDocuments() {
   const createDocument = useCallback(async (documentData: Omit<DocumentFormData, 'arquivo'>) => {
     setLoading(true);
     setError(null);
-
     try {
       const token = getAuthToken();
       if (!token) {
         throw new Error('Não autenticado');
       }
-
+      
+      // Para compatibilidade com o backend atual
+      const dataToSend = {
+        ...documentData,
+        categoria: documentData.categorias && documentData.categorias.length > 0 
+                  ? documentData.categorias.join(',')
+                  : 'geral'
+      };
+      
       const response = await fetch('/api/documentos/doc', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(documentData)
+        body: JSON.stringify(dataToSend)
       });
 
       if (!response.ok) {
@@ -200,7 +207,18 @@ export function useDocuments() {
       formData.append('file', documentData.arquivo);
       formData.append('nome', documentData.nome);
       formData.append('tipo', documentData.tipo);
-      formData.append('categoria', documentData.categoria);
+      
+      // Para compatibilidade com o backend atual, envie todas as categorias como uma string separada por vírgulas
+      if (documentData.categorias && documentData.categorias.length > 0) {
+        // Enviar todas as categorias como uma string separada por vírgula
+        formData.append('categoria', documentData.categorias.join(','));
+        
+        // Enviar também o array completo (para uso futuro quando o backend for atualizado)
+        documentData.categorias.forEach(cat => formData.append('categorias[]', cat));
+      } else {
+        // Categoria padrão se não houver nenhuma selecionada
+        formData.append('categoria', 'geral');
+      }
       
       if (documentData.descricao) formData.append('descricao', documentData.descricao);
       if (documentData.licitacaoId) formData.append('licitacaoId', documentData.licitacaoId);
@@ -261,7 +279,7 @@ export function useDocuments() {
         const uploadData: DocumentFormData = {
           nome: updateData.nome || currentDoc.nome,
           tipo: updateData.tipo || currentDoc.tipo,
-          categoria: updateData.categoria || currentDoc.categoria,
+          categorias: updateData.categorias || currentDoc.categorias || [],
           descricao: updateData.descricao || currentDoc.descricao,
           licitacaoId: updateData.licitacaoId || currentDoc.licitacao_id,
           numeroDocumento: updateData.numeroDocumento || currentDoc.numero_documento,
@@ -283,31 +301,51 @@ export function useDocuments() {
       }
 
       // Se não tiver arquivo, apenas atualizar os metadados
-      const response = await fetch(`/api/documentos/doc/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+      try {
+        // Buscar documento atual para obter dados existentes
+        const currentDoc = await fetchDocumentById(id);
+        if (!currentDoc) {
+          throw new Error('Documento não encontrado');
+        }
+        
+        const dataToSend = {
           id,
-          ...updateData
-        })
-      });
+          ...updateData,
+          // Para compatibilidade com o backend atual
+          categoria: updateData.categorias && updateData.categorias.length > 0 
+                    ? updateData.categorias.join(',')
+                    : (currentDoc.categorias && currentDoc.categorias.length > 0 
+                      ? currentDoc.categorias.join(',')
+                      : 'geral')
+        };
+        
+        const response = await fetch(`/api/documentos/doc/${id}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(dataToSend)
+        });
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Erro ao atualizar documento: ${response.status} ${errorData}`);
+        if (!response.ok) {
+          const errorData = await response.text();
+          throw new Error(`Erro ao atualizar documento: ${response.status} ${errorData}`);
+        }
+
+        const data = await response.json();
+        
+        // Atualizar o documento na lista local
+        setDocuments(prevDocs => 
+          prevDocs.map(doc => doc.id === id ? data.documento : doc)
+        );
+        
+        return data.documento;
+      } catch (err: any) {
+        console.error('Erro ao atualizar documento:', err);
+        setError(err.message);
+        return null;
       }
-
-      const data = await response.json();
-      
-      // Atualizar o documento na lista local
-      setDocuments(prevDocs => 
-        prevDocs.map(doc => doc.id === id ? data.documento : doc)
-      );
-      
-      return data.documento;
     } catch (err: any) {
       console.error('Erro ao atualizar documento:', err);
       setError(err.message);

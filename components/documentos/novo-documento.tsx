@@ -24,6 +24,7 @@ import { ptBR } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import { useLicitacoes, Licitacao } from "@/hooks/useLicitacoes"
+import { MultiSelectTags } from "@/components/ui/multi-select-tags";
 
 interface NovoDocumentoProps {
   onDocumentoAdded?: (documento: any, arquivo?: File) => void
@@ -41,7 +42,7 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
   const [formData, setFormData] = useState({
     nome: "",
     tipo: "",
-    categoria: "",
+    categorias: [] as string[],
     licitacao: "",
     descricao: "",
     numeroDocumento: "",
@@ -76,6 +77,10 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
+  const handleCategoriasChange = (values: string[]) => {
+    setFormData((prev) => ({ ...prev, categorias: values }));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setArquivoSelecionado(e.target.files[0])
@@ -84,7 +89,7 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
 
   const handleSubmit = async () => {
     // Validar campos obrigatórios
-    if (!formData.nome || !formData.tipo || !formData.categoria) {
+    if (!formData.nome || !formData.tipo || !formData.categorias.length) {
       toast({
         title: "Campos obrigatórios",
         description: "Por favor, preencha todos os campos obrigatórios.",
@@ -110,8 +115,7 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
       const novoDocumento = {
         nome: formData.nome,
         tipo: formData.tipo,
-        categoria: getCategoriaLabel(formData.categoria),
-        categoriaId: formData.categoria,
+        categorias: formData.categorias,
         licitacao: formData.licitacao === "sem_licitacao" ? "Não vinculado" : licitacaoNome,
         licitacaoId: formData.licitacao === "sem_licitacao" ? "" : formData.licitacao,
         dataUpload: format(new Date(), "dd/MM/yyyy", { locale: ptBR }),
@@ -132,7 +136,7 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
       setFormData({
         nome: "",
         tipo: "",
-        categoria: "",
+        categorias: [],
         licitacao: "",
         descricao: "",
         numeroDocumento: "",
@@ -159,19 +163,17 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
     }
   }
 
-  // Função para obter o label da categoria
-  const getCategoriaLabel = (categoriaId: string): string => {
-    const categorias: Record<string, string> = {
-      projetos: "Projetos",
-      contabeis: "Contábeis",
-      societarios: "Societários",
-      juridicos: "Jurídicos",
-      tecnicos: "Técnicos",
-      atestado_capacidade: "Atestado de Capacidade",
-    }
-    return categorias[categoriaId] || categoriaId
-  }
-  
+  // Categorias disponíveis
+  const categoriasDisponiveis = [
+    { value: "juridicos", label: "Jurídicos" },
+    { value: "contabeis", label: "Contábeis" },
+    { value: "projetos", label: "Projetos" },
+    { value: "tecnicos", label: "Técnicos" },
+    { value: "societarios", label: "Societários" },
+    { value: "licitacao", label: "Licitação" },
+    { value: "comercial", label: "Comercial" },
+  ];
+
   // Formatar o nome da licitação para exibição (modalidade + número)
   const formatarNomeLicitacao = (licitacao: Licitacao): string => {
     return `${licitacao.modalidade} ${licitacao.numero}`;
@@ -239,22 +241,23 @@ export function NovoDocumento({ onDocumentoAdded }: NovoDocumentoProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="categoria">
-                Categoria <span className="text-red-500">*</span>
+              <Label htmlFor="categorias">
+                Categorias <span className="text-red-500">*</span>
               </Label>
-              <Select value={formData.categoria} onValueChange={(value) => handleSelectChange("categoria", value)} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="juridicos">Jurídicos</SelectItem>
-                  <SelectItem value="contabeis">Contábeis</SelectItem>
-                  <SelectItem value="projetos">Projetos</SelectItem>
-                  <SelectItem value="tecnicos">Técnicos</SelectItem>
-                  <SelectItem value="societarios">Societários</SelectItem>
-                  <SelectItem value="atestado_capacidade">Atestado de Capacidade</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelectTags
+                options={categoriasDisponiveis}
+                value={formData.categorias}
+                onChange={handleCategoriasChange}
+                placeholder="Selecione as categorias"
+              />
+              <div className="flex flex-wrap gap-2 mt-2">
+                {(Array.isArray(formData.categorias) ? formData.categorias : []).map((cat) => {
+                  const label = categoriasDisponiveis.find(c => c.value === cat)?.label || cat;
+                  return (
+                    <span key={cat} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">{label}</span>
+                  );
+                })}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="licitacao">Licitação (opcional)</Label>

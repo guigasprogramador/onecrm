@@ -219,13 +219,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       document.cookie = "refreshToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
       
       // Força um redirecionamento completo para a página de login
-      window.location.href = '/auth/login';
+      window.location.href = 'http://127.0.0.1:59495/auth/login';
       
       toast.success("Logout realizado com sucesso!");
     } catch (error) {
       console.error("Erro durante o logout:", error);
       // Força um redirecionamento mesmo em caso de erro
-      window.location.href = '/auth/login';
+      window.location.href = 'http://127.0.0.1:59495/auth/login';
     }
   };
 

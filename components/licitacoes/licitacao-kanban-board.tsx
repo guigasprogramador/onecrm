@@ -1,12 +1,13 @@
 "use client"
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd"
 import { Licitacao } from "./detalhes-licitacao"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Toggle } from "@/components/ui/toggle"
 import { FormularioSimplificadoLicitacao } from "./formulario-simplificado-licitacao"
 import { PlusCircle, FileText, FileTextIcon } from "lucide-react"
+import { useMediaQuery } from "@/hooks/use-media-query"
 
 interface LicitacaoKanbanBoardProps {
   licitacoes: Licitacao[]
@@ -28,7 +29,14 @@ const columns = [
 
 export function LicitacaoKanbanBoard({ licitacoes, onUpdateStatus, onLicitacaoClick }: LicitacaoKanbanBoardProps) {
   const [showSimplifiedForm, setShowSimplifiedForm] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+  const isMobile = useMediaQuery("(max-width: 768px)")
+  const isTablet = useMediaQuery("(min-width: 769px) and (max-width: 1024px)")
+  
+  // Montar o componente apenas no lado do cliente
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Função para obter licitações por status
   const getLicitacoesByStatus = (status: string) => {
@@ -72,12 +80,24 @@ export function LicitacaoKanbanBoard({ licitacoes, onUpdateStatus, onLicitacaoCl
       currency: 'BRL'
     }).format(value)
   }
+  
+  // Determinar a largura da coluna com base no tamanho da tela
+  const getColumnWidth = () => {
+    if (isMobile) return "w-[85vw] min-w-[250px]"
+    if (isTablet) return "w-[45vw] min-w-[250px]"
+    return "w-[280px] min-w-[250px]"
+  }
 
+  // Se não estiver montado, retornar um placeholder para evitar problemas de hidratação
+  if (!isMounted) {
+    return <div className="h-[calc(100vh-250px)] bg-gray-100 rounded-md animate-pulse"></div>
+  }
+  
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Licitações</h2>
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+        <h2 className="text-xl sm:text-2xl font-bold">Licitações</h2>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
           <div className="flex items-center gap-2">
             <Toggle
               pressed={showSimplifiedForm}
@@ -87,58 +107,29 @@ export function LicitacaoKanbanBoard({ licitacoes, onUpdateStatus, onLicitacaoCl
               {showSimplifiedForm ? (
                 <div className="flex items-center gap-2">
                   <FileTextIcon className="h-4 w-4" />
-                  <span>Simplificado</span>
+                  <span className="hidden sm:inline">Simplificado</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  <span>Completo</span>
+                  <span className="hidden sm:inline">Completo</span>
                 </div>
               )}
             </Toggle>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <PlusCircle className="w-4 h-4 mr-2" />
-                Nova Licitação
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>
-                  {showSimplifiedForm ? "Nova Licitação (Simplificado)" : "Nova Licitação"}
-                </DialogTitle>
-              </DialogHeader>
-              {showSimplifiedForm ? (
-                <FormularioSimplificadoLicitacao
-                  onClose={() => setIsDialogOpen(false)}
-                  onSuccess={() => {
-                    // Atualizar a lista de licitações
-                    if (onLicitacaoClick) {
-                      onLicitacaoClick({} as Licitacao)
-                    }
-                  }}
-                />
-              ) : (
-                // Aqui você pode manter o formulário complexo existente
-                <div>Formulário Complexo</div>
-              )}
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex overflow-x-auto pb-6 gap-4">
+        <div className="flex overflow-x-auto pb-6 gap-3 md:gap-4 snap-x snap-mandatory touch-pan-x scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
           {columns.map((column) => (
             <Droppable key={column.id} droppableId={column.id}>
               {(provided, snapshot) => (
                 <div
                   ref={provided.innerRef}
                   {...provided.droppableProps}
-                  className={`flex-shrink-0 w-[280px] min-w-[280px] bg-gray-50 rounded-md p-2 ${
-                    snapshot.isDraggingOver ? "bg-blue-50" : ""
+                  className={`flex-shrink-0 ${getColumnWidth()} bg-gray-50 rounded-md p-2 snap-center transition-colors duration-200 ${
+                    snapshot.isDraggingOver ? "bg-blue-50 border-2 border-blue-200" : ""
                   }`}
                 >
                   <h3 className="text-sm font-medium mb-2 px-2 py-1 truncate" title={column.title}>
@@ -147,7 +138,7 @@ export function LicitacaoKanbanBoard({ licitacoes, onUpdateStatus, onLicitacaoCl
                       {getLicitacoesByStatus(column.id).length}
                     </span>
                   </h3>
-                  <div className="min-h-[calc(100vh-250px)] rounded-md">
+                  <div className="min-h-[calc(100vh-250px)] max-h-[calc(100vh-200px)] overflow-y-auto rounded-md pr-1 scrollbar-thin scrollbar-thumb-gray-200">
                     {getLicitacoesByStatus(column.id).map((licitacao, index) => (
                       <Draggable key={licitacao.id} draggableId={licitacao.id} index={index}>
                         {(provided, snapshot) => (
@@ -156,24 +147,24 @@ export function LicitacaoKanbanBoard({ licitacoes, onUpdateStatus, onLicitacaoCl
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                             className={`p-3 mb-2 rounded-md ${
-                              snapshot.isDragging ? "bg-blue-100 shadow-lg" : "bg-white"
-                            } border shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-300`}
+                              snapshot.isDragging ? "bg-blue-100 shadow-lg border-blue-300 scale-[1.02] z-10" : "bg-white"
+                            } border shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-300 transition-all duration-200 touch-manipulation`}
                             onClick={() => onLicitacaoClick && onLicitacaoClick(licitacao)}
                           >
                             <h4 className="font-medium text-sm mb-1 break-words line-clamp-2" title={licitacao.titulo}>
                               {licitacao.titulo}
                             </h4>
-                            <p className="text-xs text-gray-500 mb-1 truncate" title={licitacao.orgao}>
-                              {licitacao.orgao}
+                            <p className="text-xs text-gray-500 mb-1 truncate" title={typeof licitacao.orgao === 'object' && licitacao.orgao ? String(licitacao.orgao.nome) : String(licitacao.orgao)}>
+                              {typeof licitacao.orgao === 'object' && licitacao.orgao ? String(licitacao.orgao.nome) : String(licitacao.orgao)}
                             </p>
                             <div className="flex justify-between items-center flex-wrap gap-1">
-                              <span className="text-xs font-semibold">{formatCurrency(licitacao.valorEstimado)}</span>
-                              <span className="text-xs text-blue-500">{licitacao.dataAbertura}</span>
+                              <span className="text-xs font-semibold">{formatCurrency(licitacao.valorEstimado || (licitacao as any).valor_estimado)}</span>
+                              <span className="text-xs text-blue-500">{licitacao.dataAbertura || licitacao.data_abertura}</span>
                             </div>
                             {licitacao.documentos && (
                               <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
                                 <span>Docs: {licitacao.documentos.length}</span>
-                                <span>Resp: {licitacao.responsavel}</span>
+                                <span className="truncate max-w-[50%]" title={licitacao.responsavel}>Resp: {licitacao.responsavel}</span>
                               </div>
                             )}
                           </div>
@@ -182,7 +173,9 @@ export function LicitacaoKanbanBoard({ licitacoes, onUpdateStatus, onLicitacaoCl
                     ))}
                     {provided.placeholder}
                     {getLicitacoesByStatus(column.id).length === 0 && (
-                      <div className="text-center py-4 text-sm text-gray-400">Arraste itens para cá</div>
+                      <div className="text-center py-4 text-sm text-gray-400 border-2 border-dashed border-gray-200 rounded-md h-24 flex items-center justify-center">
+                        Arraste itens para cá
+                      </div>
                     )}
                   </div>
                 </div>

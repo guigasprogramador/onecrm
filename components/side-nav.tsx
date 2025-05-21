@@ -19,6 +19,7 @@ import {
   Bell,
 } from "lucide-react"
 import { Logo } from "@/components/ui/logo"
+import Image from "next/image"
 import { useState, useEffect } from "react"
 
 export function SideNav() {
@@ -72,7 +73,14 @@ export function SideNav() {
         )}
         {collapsed && (
           <div className="mx-auto">
-            <Logo className="w-8 h-8" />
+            <Image
+              src="/logo-menu-recuado.png"
+              alt="Logo Menu Recuado"
+              width={48}
+              height={48}
+              className="w-8 h-8 object-contain"
+              priority
+            />
           </div>
         )}
         <Button

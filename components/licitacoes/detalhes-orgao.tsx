@@ -1174,7 +1174,7 @@ export function DetalhesOrgao({
                                 <div className="space-y-2">
                                       <Label>Cargo</Label>
                                       <Input 
-                                    value={contato.cargo || ""}
+                                        value={contato.cargo || ""} 
                                     onChange={(e) => handleContatoChange(contato.id, 'cargo', e.target.value)}
                                       />
                                     </div>
@@ -1190,7 +1190,7 @@ export function DetalhesOrgao({
                                 <div className="space-y-2">
                                       <Label>Telefone</Label>
                                       <Input 
-                                    value={contato.telefone || ""}
+                                        value={contato.telefone || ""} 
                                     onChange={(e) => handleContatoChange(contato.id, 'telefone', e.target.value)}
                                       />
                                     </div>
@@ -1232,8 +1232,8 @@ export function DetalhesOrgao({
                                         {contato.telefone}
                                       </a>
                                     </div>
-                                  )}
-                                </div>
+                              )}
+                            </div>
                               </div>
                               <div className="flex space-x-2">
                                   <Button

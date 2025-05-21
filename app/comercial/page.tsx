@@ -98,12 +98,32 @@ export default function ComercialPage() {
     setFilteredOportunidades(oportunidades);
   }, [oportunidades]);
 
-  // Carregar oportunidades, clientes e estatísticas na inicialização
+  // Carregar oportunidades, clientes e estatísticas na inicialização de forma paralela
   useEffect(() => {
-    console.log("Carregando dados iniciais...");
-    fetchOportunidades();
-    fetchClientes();
-    fetchEstatisticas();
+    const carregarDados = async () => {
+      console.log("Carregando dados iniciais em paralelo...");
+      setLoading(true);
+      
+      try {
+        // Carregar todos os dados em paralelo
+        await Promise.all([
+          fetchOportunidades(),
+          fetchClientes(),
+          fetchEstatisticas()
+        ]);
+      } catch (error) {
+        console.error("Erro ao carregar dados iniciais:", error);
+        toast({
+          title: "Erro ao carregar dados",
+          description: "Ocorreu um erro ao carregar os dados. Tente novamente.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    carregarDados();
   }, []);
 
   // Função para aplicar filtros otimizados

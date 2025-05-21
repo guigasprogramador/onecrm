@@ -123,3 +123,36 @@
   }
 }
 
+/* Estilos personalizados para scrollbars */
+@layer utilities {
+  /* Scrollbar fina */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  /* Trilha da scrollbar */
+  .scrollbar-track-transparent::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  /* Thumb da scrollbar */
+  .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+  
+  .scrollbar-thumb-gray-200::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thumb-gray-200::-webkit-scrollbar-thumb:hover {
+    background: #d1d5db;
+  }
+}
+
